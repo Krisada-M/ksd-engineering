@@ -121,3 +121,12 @@ test("critical gate cannot be bypassed by marking required false", () => {
   assert.equal(report.verdict, "NO_GO");
   assert.equal(report.gates[1].required, true);
 });
+
+test("fatal parser errors cannot be hidden by changed-line filtering", () => {
+  const report = [{ filePath: "/work/src/user.ts", messages: [
+    { line: 1, fatal: true, severity: 2, ruleId: null, message: "Parsing error" },
+  ] }];
+  const result = inspectChangedScope(patch, report, { cwd: "/work" });
+  assert.equal(result.status, "FIX_REQUIRED");
+  assert.equal(result.diagnostics[0].message, "Parsing error");
+});
