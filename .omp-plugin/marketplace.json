@@ -1,0 +1,16 @@
+{
+  "name": "engineering-proxy",
+  "owner": { "name": "Krisada-M" },
+  "metadata": {
+    "description": "Repo-adaptive engineering policy for OMP, designed to coexist with Ponytail",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "engineering-proxy",
+      "description": "Balanced engineering policy and quality-gate workflow, Ponytail compatible",
+      "source": "./plugins/engineering-proxy",
+      "version": "0.1.0"
+    }
+  ]
+}
