@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, relative, isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export function validateRelease(root) {
   const manifest = JSON.parse(readFileSync(join(root, ".omp-plugin/marketplace.json"), "utf8"));
@@ -10,7 +11,10 @@ export function validateRelease(root) {
 
   const entry = manifest.plugins[0];
   const base = resolve(root, entry.source);
-  if (!base.startsWith(resolve(root) + "/")) throw new Error("Plugin source must remain inside repository");
+  const rel = relative(root, base);
+  if (!rel || rel === ".." || rel.startsWith(".." + (process.platform === "win32" ? "\\\\" : "/")) || isAbsolute(rel)) {
+    throw new Error("Plugin source must remain inside repository");
+  }
 
   const pkg = JSON.parse(readFileSync(join(base, "package.json"), "utf8"));
   const versions = [manifest.metadata?.version, entry.version, pkg.version];
@@ -27,7 +31,7 @@ export function validateRelease(root) {
   return { version: versions[0], extension: extension[0], source: entry.source };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
   try {
     process.stdout.write(JSON.stringify(validateRelease(resolve(process.argv[2] || "."))) + "\n");
   } catch (error) {
