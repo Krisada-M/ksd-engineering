@@ -14,7 +14,8 @@ export function parseChangedLines(patch) {
     }
 
     if (line.startsWith("+++ b/")) {
-      path = line.slice(6).replaceAll("\\", "/");
+      path = normalize(line.slice(6)).replaceAll("\\", "/");
+      if (path === ".." || path.startsWith("../")) throw new Error("Diff path escapes repository");
       if (!files.has(path)) files.set(path, new Set());
       continue;
     }
@@ -54,7 +55,7 @@ function reportPath(filename, cwd) {
  */
 export function inspectChangedScope(patch, eslintReport, { cwd = process.cwd() } = {}) {
   const changes = parseChangedLines(patch);
-  const sourceFiles = [...changes.keys()].filter(name => /\.[cm]?[jt]sx?$/.test(name));
+  const sourceFiles = [...changes.keys()].filter(name => /\.[cm]?[jt]sx?$/.test(name) && changes.get(name).size > 0);
   if (sourceFiles.length === 0) {
     return { status: "NOT_APPLICABLE", checkedFiles: [], missingFiles: [], diagnostics: [] };
   }
