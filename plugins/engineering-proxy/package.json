@@ -1,11 +1,23 @@
 {
   "name": "omp-engineering-proxy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "description": "Repo-adaptive engineering policy extension for OMP, compatible with Ponytail",
-  "engines": { "node": ">=20" },
-  "omp": { "extensions": ["./index.js"] },
-  "pi": { "extensions": ["./index.js"] },
-  "scripts": { "test": "node --test test/*.test.js" }
+  "engines": {
+    "node": ">=20"
+  },
+  "omp": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
 }
