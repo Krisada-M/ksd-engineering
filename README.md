@@ -54,7 +54,9 @@ omp config get composer.shape
 
 The `pi` composer renders the full status line beneath the editor, including OMP review context and extension status segments. You can also pick the Pi composer from `/settings` → Appearance → Composer Shape. To restore the original top-border layout: `omp config set composer.shape box`. This is a **global appearance setting** and is never changed automatically by this plugin. Project-local settings or other overrides can take precedence.
 
-The bottom status displays `🛡 KSD: BALANCED` while enabled, next to other extension status elements such as Ponytail. Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears it on the next supported lifecycle event. `engineering-review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
+The bottom status displays `○ 🛡 KSD: BALANCED` when the agent is idle and `● 🛡 KSD: BALANCED` while the agent is running. With a theme-capable OMP TUI the idle dot is dim and the active dot uses the accent color. Status refreshes on `agent_start`, `agent_end`, new sessions, switches, branches and explicit Engineering Proxy commands. **The dot is agent activity, NOT a quality-gate pass indicator or proof that Ponytail itself is active.** KSD does not read or mutate Ponytail mode.
+
+Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears the KSD status on the next supported lifecycle event, even if a review is running. `engineering-review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
 
 ## Deterministic changed-line diagnostics (opt-in)
 
