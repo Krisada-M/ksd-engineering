@@ -3,9 +3,9 @@ const STATES = new Set(["VERIFIED", "PARTIAL", "NOT_RUN", "BLOCKED", "FAILED", "
 export function hasEvidence(gate) {
   const e = gate?.evidence;
   if (!e || typeof e !== "object") return false;
-  if (e.type === "command") return Boolean(e.command?.trim() && e.result?.trim());
-  if (e.type === "source") return Boolean(e.path?.trim() && e.observation?.trim());
-  if (e.type === "ci-run") return Boolean(e.url?.trim() && e.conclusion === "success");
+  if (e.type === "command") return typeof e.command === "string" && !!e.command.trim() && typeof e.result === "string" && !!e.result.trim();
+  if (e.type === "source") return typeof e.path === "string" && !!e.path.trim() && typeof e.observation === "string" && !!e.observation.trim();
+  if (e.type === "ci-run") return typeof e.url === "string" && /^https:\/\//.test(e.url) && e.conclusion === "success";
   return false;
 }
 
@@ -54,6 +54,6 @@ export function assessReview({ scope = "code-review", gates } = {}) {
     verdict,
     gates: normalized,
     reasons: missing.map(g => g.id + ": " + g.status),
-    disclaimer: "No merge or deployment approval is granted by this verdict.",
+    disclaimer: "Reported evidence is supplied by the caller and not independently authenticated. No merge or deployment approval is granted.",
   };
 }
