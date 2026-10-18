@@ -12,7 +12,7 @@ export function validateRelease(root) {
   const entry = manifest.plugins[0];
   const base = resolve(root, entry.source);
   const rel = relative(root, base);
-  if (!rel || rel === ".." || rel.startsWith(".." + (process.platform === "win32" ? "\\\\" : "/")) || isAbsolute(rel)) {
+  if (!rel || rel === ".." || rel.split(/[\\/]/)[0] === ".." || isAbsolute(rel)) {
     throw new Error("Plugin source must remain inside repository");
   }
 
