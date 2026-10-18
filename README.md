@@ -1,6 +1,6 @@
-# OMP Engineering Proxy — Ponytail-compatible starter (v0.1.0)
+# OMP Engineering Proxy — Ponytail-compatible starter (v0.1.1)
 
-**Status: SOURCE IMPLEMENTED / UNIT-TESTED. Live OMP integration NOT VERIFIED. GitHub publication BLOCKED (integration returned 403).**
+**Status:** Source implemented and unit-tested; the user has confirmed the v0.1.0 `/engineering-proxy` command loaded in OMP. The v0.1.1 bottom-status change still requires live Mac/WSL verification.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -20,9 +20,9 @@ omp plugin marketplace add DietrichGebert/ponytail
 omp plugin install ponytail@ponytail
 ```
 
-## Install Engineering Proxy once this repository is pushed to GitHub
+## Install Engineering Proxy
 
-Target repository: `Krisada-M/ksd-engineering-` (**trailing hyphen**). After publishing the included source to that existing empty repository, install with:
+Target repository: `Krisada-M/ksd-engineering-` (**trailing hyphen**). Install with:
 
 ```bash
 omp plugin marketplace add Krisada-M/ksd-engineering-
@@ -34,7 +34,7 @@ This marketplace package resides in `plugins/engineering-proxy/` and publishes t
 
 Before publishing, validate on the target OMP version and run the tests. No assumption is made about the installed versions on macOS/WSL.
 
-The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-proxy@engineering-proxy`. This differs from the GitHub repository name. Run `bash publish.sh` from the extracted project on your authenticated Mac/WSL to publish without force pushing.
+The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-proxy@engineering-proxy`. This differs from the GitHub repository name.
 
 ## Commands
 
@@ -42,6 +42,19 @@ The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-pr
 - `/engineering-review [optional scope]` — sends an explicit scoped review request; if Ponytail is available the agent should use Ponytail review *once* and add only independent Engineering Proxy gates.
 - `/ponytail lite|full|ultra|off` — owned by Ponytail, unaffected by this plugin.
 - `/ponytail-review` — owned by Ponytail; never auto-launched by Engineering Proxy.
+
+## Put REVIEW and KSD below the editor
+
+OMP owns the built-in `REVIEW` composer indicator. Engineering Proxy owns only the `engineering-proxy` extension status key; it never overwrites `review` or `ponytail`. After installing a released version of the plugin, choose the native bottom-status composer:
+
+```bash
+omp config set composer.shape pi
+omp config get composer.shape
+```
+
+The `pi` composer renders the full status line beneath the editor, including OMP review context and extension status segments. You can also pick the Pi composer from `/settings` → Appearance → Composer Shape. To restore the original top-border layout: `omp config set composer.shape box`. This is a **global appearance setting** and is never changed automatically by this plugin. Project-local settings or other overrides can take precedence.
+
+The bottom status displays `🛡 KSD: BALANCED` while enabled, next to other extension status elements such as Ponytail. Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears it on the next supported lifecycle event. `engineering-review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
 
 ## Repo-adaptive style enforcement
 
