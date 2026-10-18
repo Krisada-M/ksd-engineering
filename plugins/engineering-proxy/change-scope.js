@@ -75,9 +75,8 @@ export function inspectChangedScope(patch, eslintReport, { cwd = process.cwd() }
     const changed = changes.get(file);
     for (const issue of reports.get(file) ?? []) {
       const lineno = issue?.line;
-      const inScope = Number.isSafeInteger(lineno)
-        ? changed.has(lineno) || changed.has(lineno - 1)
-        : issue?.fatal === true;
+      const inScope = issue?.fatal === true ||
+        (Number.isSafeInteger(lineno) && (changed.has(lineno) || changed.has(lineno - 1)));
       if (!inScope) continue;
 
       diagnostics.push({
