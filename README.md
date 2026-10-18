@@ -1,6 +1,6 @@
-# OMP Engineering Proxy — Ponytail-compatible starter (v0.1.1)
+# KSD Engineering Proxy for OMP (v0.2.0)
 
-**Status:** Source implemented and unit-tested; the user has confirmed the v0.1.0 `/engineering-proxy` command loaded in OMP. The v0.1.1 bottom-status change still requires live Mac/WSL verification.
+**Status:** v0.2.0 implementation in review. Node unit tests and GitHub CI cover the code and manifest. A live OMP v0.2.0 test with Ponytail on Mac and WSL is still NOT VERIFIED.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -22,17 +22,17 @@ omp plugin install ponytail@ponytail
 
 ## Install Engineering Proxy
 
-Target repository: `Krisada-M/ksd-engineering-` (**trailing hyphen**). Install with:
+Repository: `Krisada-M/ksd-engineering` (renamed from the former trailing-hyphen name). Install with:
 
 ```bash
-omp plugin marketplace add Krisada-M/ksd-engineering-
+omp plugin marketplace add Krisada-M/ksd-engineering
 omp plugin install engineering-proxy@engineering-proxy
 omp plugin list
 ```
 
 This marketplace package resides in `plugins/engineering-proxy/` and publishes the correct `package.json#omp.extensions` entry. Restart OMP to load new extension modules.
 
-Before publishing, validate on the target OMP version and run the tests. No assumption is made about the installed versions on macOS/WSL.
+After a version is merged into main, refresh the marketplace and upgrade with `omp plugin marketplace update engineering-proxy` followed by `omp plugin upgrade engineering-proxy@engineering-proxy`. Restart OMP. Do not claim the new version is live until `omp plugin list` confirms it and a smoke test succeeds.
 
 The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-proxy@engineering-proxy`. This differs from the GitHub repository name.
 
@@ -54,7 +54,28 @@ omp config get composer.shape
 
 The `pi` composer renders the full status line beneath the editor, including OMP review context and extension status segments. You can also pick the Pi composer from `/settings` → Appearance → Composer Shape. To restore the original top-border layout: `omp config set composer.shape box`. This is a **global appearance setting** and is never changed automatically by this plugin. Project-local settings or other overrides can take precedence.
 
-The bottom status displays `🛡 KSD: BALANCED` while enabled, next to other extension status elements such as Ponytail. Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears it on the next supported lifecycle event. `engineering-review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
+The bottom status displays `○ 🛡 KSD: BALANCED` when the agent is idle and `● 🛡 KSD: BALANCED` while the agent is running. With a theme-capable OMP TUI the idle dot is dim and the active dot uses the accent color. Status refreshes on `agent_start`, `agent_end`, new sessions, switches, branches and explicit Engineering Proxy commands. **The dot is agent activity, NOT a quality-gate pass indicator or proof that Ponytail itself is active.** KSD does not read or mutate Ponytail mode.
+
+Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears the KSD status on the next supported lifecycle event, even if a review is running. `engineering-review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
+
+## Deterministic changed-line diagnostics (opt-in)
+
+The plugin includes `eslint-rules/index.js`, `change-scope.js` and `check-changed.js`.
+
+- Configure your repository's **existing ESLint setup and TypeScript parser** to load the KSD ESLint rules. The CLI does not install a parser or overwrite your ESLint config.
+- Produce a **zero-context** Git diff against the intended base (`git diff --no-ext-diff --unified=0 HEAD` includes staged and unstaged changes, but **not untracked files**).
+- Export ESLint's actual JSON report (`eslint --format json`); it may exit nonzero when it finds violations. Verify that the desired KSD rules are enabled in your repo; this utility does not prove it for you.
+- Run: `node plugins/engineering-proxy/check-changed.js --diff changes.patch --eslint-report eslint.json` from the **repository root**.
+
+Exit codes: 0 for PASS/WARN/NOT_APPLICABLE, 1 for FIX_REQUIRED, 2 for NOT_RUN/invalid input. PASS means only that the **provided report** contains no diagnostics on changed source lines (or adjacent boundary line). No parser invocation, CI run or LLM review is performed by the checker.
+
+Use in CI only after the host project explicitly adopts the ESLint rule config. For a change with no added source lines, the style check is NOT_APPLICABLE; this does not prove that deletion-only changes are behaviorally correct.
+
+## Evidence-aware review verdicts (opt-in)
+
+`review-verdict.js` exports `assessReview({scope, gates})` to assess a **provided** gate report. A VERIFIED gate requires a specific command result, source observation, or a successful CI run reference. `ci-parity` cannot be VERIFIED by finding a workflow file; its reported evidence must be of type `ci-run`. Missing critical evidence or failed required gates produce NO_GO; missing noncritical review evidence produces CONDITIONAL_GO, while release scope remains NO_GO.
+
+This is a **report validator**, not a CI provider connector: supplied evidence is not independently authenticated, a good verdict does not authorize merge or deploy, and reviews must examine actual runtime/test results before marking a gate VERIFIED.
 
 ## Repo-adaptive style enforcement
 
@@ -84,15 +105,16 @@ At a review checkpoint inspect changed files; run existing repo `format:check`, 
 ## Testing
 
 ```bash
-cd plugins/engineering-proxy
-node --test test/*.test.js
+node validate-release.js
+node --test plugins/engineering-proxy/test/*.test.js
+node --check plugins/engineering-proxy/index.js
 ```
 
 Live OMP integration tests still required on both Mac and WSL, covering simultaneous installation, Ponytail mode changes, prompt de-duplication across sessions and subagents, and disabled fallback.
 
 ## Planned next improvements (NOT implemented)
 
-- Change-scoped diagnostics after tool writes (AST-backed, no regex auto-fix).
+- Native OMP change-scoped inspection after tool writes (currently the changed-line checker is manual/CI opt-in).
 - A command to run allowlisted deterministic checks with timeouts and read-only guardrails.
 - Architecture/contract adapters for repos such as Balance Prime.
 - Review feedback ledger with operator approvals and stable versioned rule IDs.

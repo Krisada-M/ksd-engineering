@@ -11,7 +11,7 @@ Separate adjacent function implementations by one blank line. Do not insert blan
 Preserve existing architecture, contracts, validation, security, accessibility and error handling. No unrelated renames/refactors.
 Enforcement=${enforcement}: only authoritative project gates may block; ambiguous style judgments are warnings. Report verified, unverified, and blockers distinctly.
 Ponytail integration: Ponytail owns YAGNI/simplification and /ponytail-review. Do not duplicate its instructions, mutate Ponytail mode, or auto-invoke its review. Minimum diff must still meet correctness and test requirements.
-Use repo formatter/linter/types/tests as evidence; do not claim PASS without executing relevant checks. Never push, merge, deploy or modify production as part of style enforcement.`;
+Use repo formatter/linter/types/tests as evidence; do not claim PASS without executing relevant checks. Distinguish CI workflow presence from an actual successful relevant run, and never interpret a skipped DB-backed test as a pass. Never push, merge, deploy or modify production as part of style enforcement.`;
 }
 
 export function augmentSystemPrompt(event, policy) {

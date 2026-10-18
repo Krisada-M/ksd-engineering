@@ -28,7 +28,7 @@ function harness(commandNames = ["ponytail"]) {
 test("namespace does not collide with Ponytail commands or modes", () => {
   const h = harness();
   assert.deepEqual([...h.commands.keys()], ["engineering-proxy", "engineering-review"]);
-  assert.deepEqual([...h.events.keys()], ["session_start", "session_switch", "session_branch", "before_agent_start"]);
+  assert.deepEqual([...h.events.keys()], ["session_start", "session_switch", "session_branch", "agent_start", "agent_end", "before_agent_start"]);
 });
 
 test("structured sections preserve Ponytail and are stable on repeated hooks", () => {
@@ -153,9 +153,9 @@ test("session lifecycle shows a separate KSD status without touching Ponytail", 
     h.events.get("session_switch")({}, ctx);
     h.events.get("session_branch")({}, ctx);
     assert.deepEqual(h.statuses, [
-      ["engineering-proxy", "🛡 KSD: BALANCED"],
-      ["engineering-proxy", "🛡 KSD: BALANCED"],
-      ["engineering-proxy", "🛡 KSD: BALANCED"],
+      ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
+      ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
+      ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
     ]);
     assert.equal(h.sent.length, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -198,7 +198,92 @@ test("explicit review preserves KSD status and does not overwrite built-in revie
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
     await h.commands.get("engineering-review").handler("", h.ctx(dir));
-    assert.deepEqual(h.statuses, [["engineering-proxy", "🛡 KSD: BALANCED"]]);
+    assert.deepEqual(h.statuses, [["engineering-proxy", "○ 🛡 KSD: BALANCED"]]);
     assert.equal(h.sent.length, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("agent lifecycle renders filled dot while running, hollow dot when idle", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    const ctx = h.ctx(dir);
+    h.events.get("session_start")({}, ctx);
+    h.events.get("agent_start")({}, ctx);
+    h.events.get("before_agent_start")({ systemPromptOptions: { sections: {} } }, ctx);
+    h.events.get("agent_end")({}, ctx);
+
+    assert.deepEqual(h.statuses.map(([, label]) => label), [
+      "○ 🛡 KSD: BALANCED",
+      "● 🛡 KSD: BALANCED",
+      "● 🛡 KSD: BALANCED",
+      "○ 🛡 KSD: BALANCED",
+    ]);
+    assert.equal(h.statuses.every(([key]) => key === "engineering-proxy"), true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("new session, switch and branch reset stale activity without touching Ponytail", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    const ctx = h.ctx(dir);
+    for (const lifecycleEvent of ["session_start", "session_switch", "session_branch"]) {
+      h.events.get("agent_start")({}, ctx);
+      h.events.get(lifecycleEvent)({}, ctx);
+      assert.deepEqual(h.statuses.slice(-2), [
+        ["engineering-proxy", "● 🛡 KSD: BALANCED"],
+        ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
+      ]);
+    }
+    assert.equal(h.sent.length, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("disabled project clears status even when agent is active", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    mkdirSync(join(dir, ".git"));
+    const ctx = h.ctx(dir);
+    h.events.get("agent_start")({}, ctx);
+    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+    h.events.get("before_agent_start")({ systemPromptOptions: { sections: { ponytail: "full" } } }, ctx);
+    assert.deepEqual(h.statuses.slice(-2), [
+      ["engineering-proxy", "● 🛡 KSD: BALANCED"],
+      ["engineering-proxy", undefined],
+    ]);
+    h.events.get("agent_end")({}, ctx);
+    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", undefined]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("uses OMP theme for colored dots when available", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    const ctx = h.ctx(dir);
+    ctx.ui.theme = { fg: (tone, glyph) => "[" + tone + ":" + glyph + "]" };
+    h.events.get("session_start")({}, ctx);
+    h.events.get("agent_start")({}, ctx);
+    h.events.get("agent_end")({}, ctx);
+    assert.deepEqual(h.statuses.map(([, label]) => label), [
+      "[dim:○] 🛡 KSD: BALANCED",
+      "[accent:●] 🛡 KSD: BALANCED",
+      "[dim:○] 🛡 KSD: BALANCED",
+    ]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("theme failures and unsupported UI never crash the activity lifecycle", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    const ctx = h.ctx(dir);
+    Object.defineProperty(ctx.ui, "theme", { get() { throw new Error("Theme unavailable"); } });
+    assert.doesNotThrow(() => h.events.get("agent_start")({}, ctx));
+    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "● 🛡 KSD: BALANCED"]);
+    assert.doesNotThrow(() => h.events.get("agent_end")({}, { cwd: dir, ui: { setStatus() { throw new Error("TUI disconnected"); } } }));
+    assert.doesNotThrow(() => h.events.get("session_start")({}, { cwd: dir, ui: {} }));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
