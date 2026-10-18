@@ -12,6 +12,7 @@ function harness(commandNames = ["ponytail"]) {
   const commands = new Map();
   const sent = [];
   const notices = [];
+  const statuses = [];
   const pi = {
     setLabel(label) { this.label = label; },
     on(event, fn) { events.set(event, fn); },
@@ -20,14 +21,14 @@ function harness(commandNames = ["ponytail"]) {
     sendUserMessage(message, options) { sent.push({ message, options }); },
   };
   createExtension(pi);
-  const ctx = (cwd, idle = true) => ({ cwd, isIdle: () => idle, ui: { notify: (...args) => notices.push(args) } });
-  return { events, commands, sent, notices, pi, ctx };
+  const ctx = (cwd, idle = true) => ({ cwd, isIdle: () => idle, ui: { notify: (...args) => notices.push(args), setStatus: (...args) => statuses.push(args) } });
+  return { events, commands, sent, notices, statuses, pi, ctx };
 }
 
 test("namespace does not collide with Ponytail commands or modes", () => {
   const h = harness();
   assert.deepEqual([...h.commands.keys()], ["engineering-proxy", "engineering-review"]);
-  assert.deepEqual([...h.events.keys()], ["before_agent_start"]);
+  assert.deepEqual([...h.events.keys()], ["session_start", "session_switch", "session_branch", "before_agent_start"]);
 });
 
 test("structured sections preserve Ponytail and are stable on repeated hooks", () => {
@@ -140,5 +141,64 @@ test("invalid per-repo config never silently enables guidance", () => {
     h.events.get("before_agent_start")(event, h.ctx(dir));
     assert.equal(event.systemPromptOptions.sections["engineering-proxy"], undefined);
     assert.ok(loadConfig(dir).configError);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("session lifecycle shows a separate KSD status without touching Ponytail", () => {
+  const h = harness(["ponytail"]);
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    const ctx = h.ctx(dir);
+    h.events.get("session_start")({}, ctx);
+    h.events.get("session_switch")({}, ctx);
+    h.events.get("session_branch")({}, ctx);
+    assert.deepEqual(h.statuses, [
+      ["engineering-proxy", "🛡 KSD: BALANCED"],
+      ["engineering-proxy", "🛡 KSD: BALANCED"],
+      ["engineering-proxy", "🛡 KSD: BALANCED"],
+    ]);
+    assert.equal(h.sent.length, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("repo disabling clears KSD status while leaving Ponytail alone", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    mkdirSync(join(dir, ".git"));
+    h.events.get("session_start")({}, h.ctx(dir));
+    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+    h.events.get("before_agent_start")({ systemPromptOptions: { sections: { ponytail: "full" } } }, h.ctx(dir));
+    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", undefined]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("invalid config fails closed, clears stale status and preserves session", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    mkdirSync(join(dir, ".git"));
+    writeFileSync(join(dir, ".engineering-proxy.json"), "{ invalid");
+    h.events.get("session_start")({}, h.ctx(dir));
+    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", undefined]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("missing or throwing setStatus is non-fatal for all supported host UIs", () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    assert.doesNotThrow(() => h.events.get("session_start")({}, { cwd: dir, ui: {} }));
+    assert.doesNotThrow(() => h.events.get("session_start")({}, { cwd: dir, ui: { setStatus() { throw Error("UI unavailable"); } } }));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("explicit review preserves KSD status and does not overwrite built-in review key", async () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
+  try {
+    await h.commands.get("engineering-review").handler("", h.ctx(dir));
+    assert.deepEqual(h.statuses, [["engineering-proxy", "🛡 KSD: BALANCED"]]);
+    assert.equal(h.sent.length, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
