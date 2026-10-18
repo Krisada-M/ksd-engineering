@@ -10,4 +10,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: node validate-release.js
       - run: node --test plugins/engineering-proxy/test/*.test.js
+      - run: node --check plugins/engineering-proxy/index.js
+      - run: node --check plugins/engineering-proxy/check-changed.js
