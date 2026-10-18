@@ -29,7 +29,7 @@ export function assessReview({ scope = "code-review", gates } = {}) {
 
     return {
       id: gate.id,
-      required: gate.required !== false,
+      required: gate.required !== false || gate.critical === true,
       critical: gate.critical === true,
       status: gate.status === "VERIFIED" && !evidenceValid ? "UNVERIFIED" : gate.status,
       evidenceValid,
