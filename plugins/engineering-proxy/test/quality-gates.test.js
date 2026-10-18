@@ -112,3 +112,12 @@ test("release with incomplete noncritical gate remains NO_GO", () => {
   ] });
   assert.equal(result.verdict, "NO_GO");
 });
+
+test("critical gate cannot be bypassed by marking required false", () => {
+  const report = assessReview({ gates: [
+    good("tests"),
+    { id: "security", required: false, critical: true, status: "NOT_RUN" },
+  ] });
+  assert.equal(report.verdict, "NO_GO");
+  assert.equal(report.gates[1].required, true);
+});
