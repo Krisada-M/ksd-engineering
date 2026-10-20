@@ -23,6 +23,10 @@ jobs:
           node-version: '22'
       - run: rustc --version && cargo --version
       - run: cargo test --manifest-path experiments/rust-core/Cargo.toml
+      - run: |
+          echo KSD_CARGO_LOCK_BEGIN
+          cat experiments/rust-core/Cargo.lock
+          echo KSD_CARGO_LOCK_END
       - run: cargo build --manifest-path experiments/rust-core/Cargo.toml
       - run: node experiments/rust-core/tests/parity.mjs
       - run: node experiments/rust-core/tests/cli-bridge.mjs
