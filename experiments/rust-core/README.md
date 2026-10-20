@@ -18,6 +18,7 @@ cargo build --manifest-path experiments/rust-core/Cargo.toml
 node experiments/rust-core/tests/parity.mjs
 node experiments/rust-core/tests/cli-bridge.mjs
 node experiments/rust-core/tests/benchmark.mjs
+node experiments/rust-core/tests/bridge-benchmark.mjs
 ```
 
 To use the native checker explicitly after building the crate:
