@@ -2,7 +2,8 @@ import { buildSdlcPolicy } from "./sdlc.js";
 
 // Keep this policy orthogonal to Ponytail's simplicity and over-engineering guidance.
 export const SECTION_KEY = "engineering-proxy";
-export const POLICY_MARKER = "[Engineering Proxy Policy v0.2]";
+export const POLICY_MARKER = "[Engineering Proxy Policy v0.3]";
+const LEGACY_MARKERS = ["[Engineering Proxy Policy v0.1]", "[Engineering Proxy Policy v0.2]"];
 export const POLICY_END = "[End Engineering Proxy Policy]";
 
 export function buildPolicy({ enforcement = "balanced" } = {}) {
@@ -35,7 +36,7 @@ export function augmentSystemPrompt(event, policy) {
   const base = event?.systemPrompt;
 
   if (Array.isArray(base)) {
-    const at = base.findIndex(part => typeof part === "string" && part.startsWith(POLICY_MARKER));
+    const at = base.findIndex(part => typeof part === "string" && [POLICY_MARKER, ...LEGACY_MARKERS].some(marker => part.startsWith(marker)));
     if (at >= 0) {
       if (base[at] === policy) return;
 
@@ -49,10 +50,10 @@ export function augmentSystemPrompt(event, policy) {
   }
 
   if (typeof base === "string") {
-    const start = base.indexOf(POLICY_MARKER);
+    const start = [POLICY_MARKER, ...LEGACY_MARKERS].map(marker => base.indexOf(marker)).filter(position => position >= 0).sort((a, b) => a - b)[0] ?? -1;
     if (start >= 0) {
       const finish = base.indexOf(POLICY_END, start);
-      if (finish < 0) return; // Do not truncate unknown legacy prompts.
+      if (finish < 0) return; // Legacy string prompts have no end marker: preserve them rather than truncate unrelated content.
 
       const to = finish + POLICY_END.length;
       const next = base.slice(0, start) + policy + base.slice(to);
