@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ if (!Number.isInteger(count) || count < 5 || count > 1000) {
   throw new Error("Expected 5 to 1000 benchmark iterations");
 }
 
-const dir = mkdtempSync(join(tmpdir(), "ksd-rust-bridge-benchmark-"));
+const dir = realpathSync(mkdtempSync(join(tmpdir(), "ksd-rust-bridge-benchmark-")));
 try {
   mkdirSync(join(dir, "src"));
   let diff = "";
