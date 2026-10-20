@@ -13,8 +13,8 @@ This crate is an isolated proof of concept for deterministic changed-line ESLint
 ## Build and verify (requires Rust toolchain)
 
 ```sh
-cargo test --manifest-path experiments/rust-core/Cargo.toml
-cargo build --manifest-path experiments/rust-core/Cargo.toml
+cargo test --locked --manifest-path experiments/rust-core/Cargo.toml
+cargo build --locked --manifest-path experiments/rust-core/Cargo.toml
 node experiments/rust-core/tests/parity.mjs
 node experiments/rust-core/tests/cli-bridge.mjs
 node experiments/rust-core/tests/benchmark.mjs
@@ -30,6 +30,19 @@ node plugins/engineering-proxy/check-changed.js --diff changes.patch --eslint-re
 For a nondefault build location set `KSD_RUST_CORE_BIN` to the native executable's absolute path. The wrapper invokes the executable directly with `shell:false`, a timeout, a bounded output buffer and response/exit-code validation. **If the binary is missing or produces malformed output, the explicit Rust command fails with NOT_RUN (exit 2) rather than silently passing.** To use the unchanged JavaScript checker, omit `--engine rust`. Do not use this mode as a required repository gate until the platform parity and performance checks are approved.
 
 Exit code: 0 = clean, warning or not applicable; 1 = changed-line error; 2 = not run/invalid input. The existing JS checker remains authoritative until parity on a representative repository corpus has been achieved and approved.
+
+## Verified CI benchmark (2026-10-20)
+
+GitHub Actions run `39391656112` (Ubuntu, 20 samples, 100 synthetic changed files):
+
+| Execution path | p50 | p95 |
+| --- | ---: | ---: |
+| Rust binary directly | 20.27 ms | 21.69 ms |
+| Fresh Node JS process directly | 31.63 ms | 33.80 ms |
+| Actual KSD JS CLI default | 33.36 ms | 35.04 ms |
+| Actual KSD JS CLI → Rust sidecar | 54.53 ms | 57.06 ms |
+
+**Decision:** Keep JavaScript as the default. The native Rust implementation is faster when invoked directly, but its current **Node → Rust child-process bridge is slower** at the tested workload. This is not evidence of an OMP end-user speedup. The JS and Rust diagnostic outputs matched across nine parity fixtures; real-world corpus parity and Mac/WSL hardware benchmarks are still pending.
 
 The benchmark measures **fresh-process end-to-end latency** on identical JSON input for both Rust and Node (with 100 synthetic changed source files). It does **not** isolate parser runtime, memory, tool-call time, actual repo editing latency or workload cache effects. Compare both p50 and p95 on the deployment machines and capture memory separately.
 
