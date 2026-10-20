@@ -1,6 +1,6 @@
-# KSD Engineering Proxy for OMP (v0.3.0)
+# KSD Engineering Proxy for OMP (v0.4.0)
 
-**Status:** v0.3.0 Adaptive + SDLC change in review. GitHub CI verifies included unit tests and release metadata; live macOS/WSL OMP + Ponytail compatibility is NOT VERIFIED.
+**Status:** v0.4.0 TypeScript performance change stacked on v0.3.0 Adaptive + SDLC. CI verifies release metadata, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -67,6 +67,25 @@ KSD's prompt policy now follows Requirements → Design → Implementation → V
 Adaptive mode emphasizes flat control flow, early returns and guarded exits without unsafe mechanical rewrites. Avoidable nesting in newly changed code is treated as FIX REQUIRED in **review guidance**, but the static ESLint rule remains an optional warning until the consuming repository explicitly enables a deterministic blocking gate. Neither mode automatically runs tests, marks an SDLC stage complete, rewrites code, or authorizes release.
 
 Session mode is stored in an OMP custom entry named `engineering-proxy-mode` when `pi.appendEntry` is supported. On session resume/switch the latest valid entry is replayed; otherwise KSD uses the project's configured default. KSD never overwrites Ponytail state.
+
+## TypeScript performance runtime (v0.4.0)
+
+KSD's hot path uses a **strict TypeScript** core at `plugins/engineering-proxy/src/runtime.ts` and checks in compiler-generated ESM under `dist/`. The OMP extension entry point remains `index.js`; it imports the compiled runtime in-process. **No native sidecar, Rust, new production dependency, or per-event subprocess** is used. Rebuilds use a pinned TypeScript compiler (5.8.3) and CI rejects generated artifact drift.
+
+- Configuration is cached per working directory for agent lifecycle events; it is explicitly refreshed on session lifecycle transitions, at the start of each new agent turn, and on status/command checks. Changes to repository configuration become visible at the next refresh point rather than during an already-running turn.
+- System prompt policy text is constructed once per effective mode and reused; the repository policy remains isolated from Ponytail.
+- Status writes are deduplicated per TUI instance using a WeakMap and reset on session transitions; changes to mode, activity, theme, or enable/disable state still redraw.
+- Typed checks run during development/CI, not at OMP runtime, and generated JavaScript ships with the plugin. No runtime npm install is required for the performance core.
+- `node plugins/engineering-proxy/test/benchmark.mjs` produces an **illustrative** single-process comparison using synthetic repeated status+policy calls; it is not a live OMP speed measurement. Numerical performance targets are aspirational until validated in real sessions.
+
+To validate from the repository root:
+
+```bash
+npx --yes --package typescript@5.8.3 tsc -p plugins/engineering-proxy/tsconfig.json
+git diff --exit-code -- plugins/engineering-proxy/dist/
+node --test plugins/engineering-proxy/test/*.test.js
+node plugins/engineering-proxy/test/benchmark.mjs
+```
 
 ## Deterministic changed-line diagnostics (opt-in)
 
