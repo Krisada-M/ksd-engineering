@@ -14,3 +14,15 @@ jobs:
       - run: node --test plugins/engineering-proxy/test/*.test.js
       - run: node --check plugins/engineering-proxy/index.js
       - run: node --check plugins/engineering-proxy/check-changed.js
+  rust-experimental:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: rustc --version && cargo --version
+      - run: cargo test --manifest-path experiments/rust-core/Cargo.toml
+      - run: cargo build --manifest-path experiments/rust-core/Cargo.toml
+      - run: node experiments/rust-core/tests/parity.mjs
+      - run: node experiments/rust-core/tests/benchmark.mjs
