@@ -1,11 +1,32 @@
-import { loadConfig } from "./config.js";
+import { loadConfig, SUPPORTED_MODES } from "./config.js";
 import { augmentSystemPrompt, buildPolicy } from "./policy.js";
 
 const STATUS_KEY = "engineering-proxy";
-const STATUS_LABEL = "🛡 KSD: BALANCED";
+const MODE_ENTRY = "engineering-proxy-mode";
+
+export function parseEngineeringCommand(input) {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (!value || value === "status") return { type: "status" };
+  if (SUPPORTED_MODES.includes(value)) return { type: "set-mode", mode: value };
+
+  return { type: "invalid" };
+}
+
+export function resolveSessionMode(entries, fallback = "balanced") {
+  const defaultMode = SUPPORTED_MODES.includes(fallback) ? fallback : "balanced";
+  if (!Array.isArray(entries)) return defaultMode;
+
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry?.type !== "custom" || entry?.customType !== MODE_ENTRY) continue;
+    if (SUPPORTED_MODES.includes(entry?.data?.mode)) return entry.data.mode;
+  }
+
+  return defaultMode;
+}
 
 /** Activity indicator reflects agent lifecycle, not policy enforcement or test results. */
-export function syncStatus(ctx, isActive = false) {
+export function syncStatus(ctx, isActive = false, mode = "balanced") {
   if (typeof ctx?.ui?.setStatus !== "function") return;
 
   try {
@@ -27,7 +48,8 @@ export function syncStatus(ctx, isActive = false) {
       // Some headless/early-start UIs do not have an initialized theme.
     }
 
-    ctx.ui.setStatus(STATUS_KEY, decoratedIndicator + " " + STATUS_LABEL);
+    const label = SUPPORTED_MODES.includes(mode) ? mode.toUpperCase() : "BALANCED";
+    ctx.ui.setStatus(STATUS_KEY, decoratedIndicator + " 🛡 KSD: " + label);
   } catch {
     // Status is best-effort; failed UI/config reads must not disrupt agent work.
   }
@@ -39,25 +61,38 @@ export function createExtension(pi) {
   pi.setLabel?.("Engineering Proxy");
 
   let isActive = false;
-  for (const eventName of ["session_start", "session_switch", "session_branch"]) {
-    pi.on(eventName, (_event, ctx) => {
-      isActive = false;
-      syncStatus(ctx, isActive);
-    });
+  let currentMode = "balanced";
+
+  function restoreSession(ctx) {
+    isActive = false;
+    const config = loadConfig(ctx?.cwd ?? process.cwd());
+    let entries = [];
+    try {
+      entries = ctx?.sessionManager?.getBranch?.() ?? ctx?.sessionManager?.getEntries?.() ?? [];
+    } catch {
+      // Session stores may be absent or not ready in headless hosts.
+    }
+
+    currentMode = resolveSessionMode(entries, config.enforcement);
+    syncStatus(ctx, isActive, currentMode);
+  }
+
+  for (const eventName of ["session_start", "session_tree", "session_switch", "session_branch"]) {
+    pi.on(eventName, (_event, ctx) => restoreSession(ctx));
   }
 
   pi.on("agent_start", (_event, ctx) => {
     isActive = true;
-    syncStatus(ctx, isActive);
+    syncStatus(ctx, isActive, currentMode);
   });
 
   pi.on("agent_end", (_event, ctx) => {
     isActive = false;
-    syncStatus(ctx, isActive);
+    syncStatus(ctx, isActive, currentMode);
   });
 
   pi.on("before_agent_start", (event, ctx) => {
-    syncStatus(ctx, isActive);
+    syncStatus(ctx, isActive, currentMode);
     const config = loadConfig(ctx.cwd);
     if (!config.enabled || process.env.ENGINEERING_PROXY_DISABLED === "1") {
       const sections = event?.systemPromptOptions?.sections;
@@ -65,19 +100,47 @@ export function createExtension(pi) {
       return;
     }
 
-    return augmentSystemPrompt(event, buildPolicy(config));
+    return augmentSystemPrompt(event, buildPolicy({ ...config, enforcement: currentMode }));
   });
 
   pi.registerCommand("engineering-proxy", {
-    description: "Show Engineering Proxy configuration and optional Ponytail presence",
-    handler: async (_args, ctx) => {
-      syncStatus(ctx, isActive);
-
+    description: "Show status or select adaptive|balanced mode (session-scoped)",
+    handler: async (args, ctx) => {
+      const parsed = parseEngineeringCommand(args);
       const config = loadConfig(ctx.cwd);
+      const enabled = config.enabled && process.env.ENGINEERING_PROXY_DISABLED !== "1";
+
+      if (parsed.type === "invalid") {
+        ctx.ui?.notify?.("Usage: /engineering-proxy [status|balanced|adaptive]", "warning");
+        return;
+      }
+
+      if (parsed.type === "set-mode") {
+        if (!enabled) {
+          ctx.ui?.notify?.("Engineering Proxy is disabled; mode unchanged.", "warning");
+          return;
+        }
+
+        currentMode = parsed.mode;
+        let persisted = false;
+        try {
+          if (typeof pi.appendEntry === "function") {
+            pi.appendEntry(MODE_ENTRY, { mode: currentMode });
+            persisted = true;
+          }
+        } catch {
+          // Runtime policy still updates, but session mode cannot be replayed.
+        }
+
+        syncStatus(ctx, isActive, currentMode);
+        ctx.ui?.notify?.(`KSD mode: ${currentMode.toUpperCase()} (${persisted ? "saved in session" : "runtime only; session persistence unavailable"})`, persisted ? "info" : "warning");
+        return;
+      }
+
+      syncStatus(ctx, isActive, currentMode);
       const names = pi.getCommands?.() ?? [];
       const ponytailFound = Array.isArray(names) && names.some(command => command?.name === "ponytail");
-      const enabled = config.enabled && process.env.ENGINEERING_PROXY_DISABLED !== "1";
-      const msg = `Engineering Proxy: ${enabled ? "ON" : "OFF"} (balanced, adaptive, readable); Ponytail command: ${ponytailFound ? "detected" : "not detected/unknown"}; Ponytail mode: not inspected`;
+      const msg = `Engineering Proxy: ${enabled ? "ON" : "OFF"}; mode: ${currentMode.toUpperCase()}; project default: ${config.enforcement.toUpperCase()}; Ponytail command: ${ponytailFound ? "detected" : "not detected/unknown"}; Ponytail mode: not inspected`;
       ctx.ui?.notify?.(config.configError ? `${msg}; WARNING: ${config.configError}` : msg, config.configError ? "warning" : "info");
     },
   });
@@ -85,7 +148,7 @@ export function createExtension(pi) {
   pi.registerCommand("engineering-review", {
     description: "Request a scoped, evidence-based engineering review (Ponytail optional)",
     handler: async (args, ctx) => {
-      syncStatus(ctx, isActive);
+      syncStatus(ctx, isActive, currentMode);
 
       const config = loadConfig(ctx.cwd);
       if (!config.enabled || process.env.ENGINEERING_PROXY_DISABLED === "1") {
