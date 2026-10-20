@@ -68,10 +68,6 @@ Adaptive mode emphasizes flat control flow, early returns and guarded exits with
 
 Session mode is stored in an OMP custom entry named `engineering-proxy-mode` when `pi.appendEntry` is supported. On session resume/switch the latest valid entry is replayed; otherwise KSD uses the project's configured default. KSD never overwrites Ponytail state.
 
-## Future Rust quality core
-
-A Rust implementation is feasible for computationally expensive AST/diff analysis, but the OMP API adapter remains JavaScript. Replacing JavaScript without end-to-end performance evidence is not justified. See [Rust migration proposal](docs/rust-core-migration.md) for representative benchmarks, cross-platform Mac ARM/WSL x64 builds, safe process boundaries and fallback requirements.
-
 ## Deterministic changed-line diagnostics (opt-in)
 
 The plugin includes `eslint-rules/index.js`, `change-scope.js` and `check-changed.js`.
