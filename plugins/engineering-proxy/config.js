@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+export const SUPPORTED_MODES = Object.freeze(["balanced", "adaptive"]);
 const DEFAULT = Object.freeze({ enabled: true, enforcement: "balanced" });
 
 export function findProjectRoot(cwd) {
@@ -27,9 +28,9 @@ export function loadConfig(cwd) {
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
       (parsed.enabled !== undefined && typeof parsed.enabled !== "boolean") ||
-      (parsed.enforcement !== undefined && parsed.enforcement !== "balanced")) {
-    return { ...DEFAULT, enabled: false, root, configPresent: true, configError: "Invalid .engineering-proxy.json (expected enabled:boolean and enforcement:'balanced')" };
+      (parsed.enforcement !== undefined && !SUPPORTED_MODES.includes(parsed.enforcement))) {
+    return { ...DEFAULT, enabled: false, root, configPresent: true, configError: "Invalid .engineering-proxy.json (expected enabled:boolean and enforcement:'balanced|adaptive')" };
   }
 
-  return { ...DEFAULT, root, configPresent: true, enabled: parsed.enabled ?? true, enforcement: "balanced" };
+  return { ...DEFAULT, root, configPresent: true, enabled: parsed.enabled ?? true, enforcement: parsed.enforcement ?? DEFAULT.enforcement };
 }
