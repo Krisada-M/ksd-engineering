@@ -161,3 +161,16 @@ test("SDLC policy covers all stages and scales gates by risk", () => {
   assert.match(buildSdlcPolicy({ mode: "adaptive" }), /lightest sufficient/);
   assert.throws(() => buildSdlcPolicy({ mode: "ultra" }), /Invalid/);
 });
+
+test("previous-version policy in array is replaced, never duplicated", () => {
+  const oldPolicy = "[Engineering Proxy Policy v0.1] legacy rules";
+  const newPolicy = buildPolicy({ enforcement: "adaptive" });
+  const result = augmentSystemPrompt({ systemPrompt: ["Base", oldPolicy, "ponytail"] }, newPolicy);
+  assert.deepEqual(result.systemPrompt, ["Base", newPolicy, "ponytail"]);
+});
+
+test("previous-version string policy without end marker is not destructively replaced", () => {
+  const legacy = "Base prompt\n\n[Engineering Proxy Policy v0.1] old rules with unknown tail";
+  assert.equal(augmentSystemPrompt({ systemPrompt: legacy }, buildPolicy({ enforcement: "adaptive" })), undefined);
+  assert.doesNotMatch(legacy, /Adaptive Clean Code/);
+});
