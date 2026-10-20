@@ -28,7 +28,7 @@ function harness(commandNames = ["ponytail"]) {
 test("namespace does not collide with Ponytail commands or modes", () => {
   const h = harness();
   assert.deepEqual([...h.commands.keys()], ["engineering-proxy", "engineering-review"]);
-  assert.deepEqual([...h.events.keys()], ["session_start", "session_switch", "session_branch", "agent_start", "agent_end", "before_agent_start"]);
+  assert.deepEqual([...h.events.keys()], ["session_start", "session_tree", "session_switch", "session_branch", "agent_start", "agent_end", "before_agent_start"]);
 });
 
 test("structured sections preserve Ponytail and are stable on repeated hooks", () => {
