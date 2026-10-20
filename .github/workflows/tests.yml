@@ -12,12 +12,6 @@ jobs:
           node-version: '22'
       - run: node validate-release.js
       - run: npx --yes --package typescript@5.8.3 tsc -p plugins/engineering-proxy/tsconfig.json
-      - run: |
-          for f in plugins/engineering-proxy/dist/{policy,sdlc}.{js,d.ts}; do
-            echo "KSD_COMPILED_BEGIN:${f}"
-            cat "${f}"
-            echo "KSD_COMPILED_END:${f}"
-          done
       - run: git diff --exit-code -- plugins/engineering-proxy/dist/
       - run: node plugins/engineering-proxy/test/benchmark.mjs
       - run: node --test plugins/engineering-proxy/test/*.test.js
