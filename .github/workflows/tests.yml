@@ -25,4 +25,5 @@ jobs:
       - run: cargo test --manifest-path experiments/rust-core/Cargo.toml
       - run: cargo build --manifest-path experiments/rust-core/Cargo.toml
       - run: node experiments/rust-core/tests/parity.mjs
+      - run: node experiments/rust-core/tests/cli-bridge.mjs
       - run: node experiments/rust-core/tests/benchmark.mjs
