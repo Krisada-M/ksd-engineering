@@ -217,7 +217,6 @@ test("agent lifecycle renders filled dot while running, hollow dot when idle", (
     assert.deepEqual(h.statuses.map(([, label]) => label), [
       "○ 🛡 KSD: BALANCED",
       "● 🛡 KSD: BALANCED",
-      "● 🛡 KSD: BALANCED",
       "○ 🛡 KSD: BALANCED",
     ]);
     assert.equal(h.statuses.every(([key]) => key === "engineering-proxy"), true);
