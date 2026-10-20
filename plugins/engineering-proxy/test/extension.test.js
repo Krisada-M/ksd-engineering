@@ -28,7 +28,7 @@ function harness(commandNames = ["ponytail"]) {
 test("namespace does not collide with Ponytail commands or modes", () => {
   const h = harness();
   assert.deepEqual([...h.commands.keys()], ["engineering-proxy", "engineering-review"]);
-  assert.deepEqual([...h.events.keys()], ["session_start", "session_switch", "session_branch", "agent_start", "agent_end", "before_agent_start"]);
+  assert.deepEqual([...h.events.keys()], ["session_start", "session_tree", "session_switch", "session_branch", "agent_start", "agent_end", "before_agent_start"]);
 });
 
 test("structured sections preserve Ponytail and are stable on repeated hooks", () => {
@@ -113,6 +113,7 @@ test("review only starts on explicit command, one request per trigger, and queue
     await h.commands.get("engineering-review").handler("apps/web/features/auth", h.ctx(dir, false));
     assert.equal(h.sent.length, 1);
     assert.match(h.sent[0].message, /apps\/web\/features\/auth/);
+    assert.match(h.sent[0].message, /Check the applicable SDLC stages/);
     assert.deepEqual(h.sent[0].options, { deliverAs: "followUp" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

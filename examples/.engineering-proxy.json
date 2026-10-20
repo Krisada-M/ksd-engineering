@@ -1,4 +1,4 @@
 {
   "enabled": true,
-  "enforcement": "balanced"
+  "enforcement": "adaptive"
 }

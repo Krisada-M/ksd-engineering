@@ -1,6 +1,6 @@
-# KSD Engineering Proxy for OMP (v0.2.0)
+# KSD Engineering Proxy for OMP (v0.3.0)
 
-**Status:** v0.2.0 implementation in review. Node unit tests and GitHub CI cover the code and manifest. A live OMP v0.2.0 test with Ponytail on Mac and WSL is still NOT VERIFIED.
+**Status:** v0.3.0 Adaptive + SDLC change in review. GitHub CI verifies included unit tests and release metadata; live macOS/WSL OMP + Ponytail compatibility is NOT VERIFIED.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -38,7 +38,9 @@ The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-pr
 
 ## Commands
 
-- `/engineering-proxy` — reports enabled status and whether a Ponytail command appears registered. It intentionally does not infer the Ponytail runtime mode.
+- `/engineering-proxy` or `/engineering-proxy status` — reports enabled status, effective mode and repo default, and whether the Ponytail command is registered. It does **not** infer Ponytail's actual mode.
+- `/engineering-proxy adaptive` — selects flat-by-default Clean Code review and risk-scaled SDLC policy in the current session.
+- `/engineering-proxy balanced` — returns to the conservative, repo-aware policy. OMP `appendEntry` saves mode in session history when supported; otherwise it only applies for the current runtime.
 - `/engineering-review [optional scope]` — sends an explicit scoped review request; if Ponytail is available the agent should use Ponytail review *once* and add only independent Engineering Proxy gates.
 - `/ponytail lite|full|ultra|off` — owned by Ponytail, unaffected by this plugin.
 - `/ponytail-review` — owned by Ponytail; never auto-launched by Engineering Proxy.
@@ -54,9 +56,17 @@ omp config get composer.shape
 
 The `pi` composer renders the full status line beneath the editor, including OMP review context and extension status segments. You can also pick the Pi composer from `/settings` → Appearance → Composer Shape. To restore the original top-border layout: `omp config set composer.shape box`. This is a **global appearance setting** and is never changed automatically by this plugin. Project-local settings or other overrides can take precedence.
 
-The bottom status displays `○ 🛡 KSD: BALANCED` when the agent is idle and `● 🛡 KSD: BALANCED` while the agent is running. With a theme-capable OMP TUI the idle dot is dim and the active dot uses the accent color. Status refreshes on `agent_start`, `agent_end`, new sessions, switches, branches and explicit Engineering Proxy commands. **The dot is agent activity, NOT a quality-gate pass indicator or proof that Ponytail itself is active.** KSD does not read or mutate Ponytail mode.
+The bottom status displays `○ 🛡 KSD: BALANCED` (or `ADAPTIVE`) when the agent is idle and `● 🛡 KSD: BALANCED` (or `ADAPTIVE`) while the agent is running. With a theme-capable OMP TUI the idle dot is dim and the active dot uses the accent color. Status refreshes on `agent_start`, `agent_end`, new sessions, switches, branches and explicit Engineering Proxy commands. **The dot is agent activity, NOT a quality-gate pass indicator or proof that Ponytail itself is active.** KSD does not read or mutate Ponytail mode.
 
 Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears the KSD status on the next supported lifecycle event, even if a review is running. `engineering-review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
+
+## SDLC workflow (both modes)
+
+KSD's prompt policy now follows Requirements → Design → Implementation → Verification → Delivery. The checks are **risk-scaled**, not a rigid documentation ceremony: trivial style changes can use a short scope and focused checks, while security-sensitive authentication, payments, data migrations and concurrency require stronger contract and test evidence.
+
+Adaptive mode emphasizes flat control flow, early returns and guarded exits without unsafe mechanical rewrites. Avoidable nesting in newly changed code is treated as FIX REQUIRED in **review guidance**, but the static ESLint rule remains an optional warning until the consuming repository explicitly enables a deterministic blocking gate. Neither mode automatically runs tests, marks an SDLC stage complete, rewrites code, or authorizes release.
+
+Session mode is stored in an OMP custom entry named `engineering-proxy-mode` when `pi.appendEntry` is supported. On session resume/switch the latest valid entry is replayed; otherwise KSD uses the project's configured default. KSD never overwrites Ponytail state.
 
 ## Deterministic changed-line diagnostics (opt-in)
 
@@ -79,7 +89,7 @@ This is a **report validator**, not a CI provider connector: supplied evidence i
 
 ## Repo-adaptive style enforcement
 
-`before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["engineering-proxy"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.engineering-proxy.json` is optional (see `examples/`), supports `enabled` and `enforcement=balanced` only.
+`before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["engineering-proxy"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.engineering-proxy.json` is optional (see `examples/`), supports `enabled:boolean` and `enforcement: "balanced"|"adaptive"`. The repository default is balanced when absent; explicit mode commands override it for the current session. Existing unrelated settings are untouched.
 
 **Important:** OMP policy injection is guidance, not a deterministic test. To enforce your preferences at commit/CI, opt into `plugins/engineering-proxy/eslint-rules/index.js` from your existing ESLint flat config. No ESLint config is overwritten. Rules:
 
