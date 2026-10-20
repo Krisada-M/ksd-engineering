@@ -1,6 +1,6 @@
 {
   "name": "omp-engineering-proxy",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "license": "MIT",
   "description": "Repo-adaptive engineering policy extension for OMP, compatible with Ponytail",
@@ -18,6 +18,8 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "typecheck": "npx --yes --package typescript@5.8.3 tsc --noEmit -p tsconfig.json",
+    "build": "npx --yes --package typescript@5.8.3 tsc -p tsconfig.json"
   }
 }

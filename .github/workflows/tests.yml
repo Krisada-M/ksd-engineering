@@ -11,6 +11,10 @@ jobs:
         with:
           node-version: '22'
       - run: node validate-release.js
+      - run: npx --yes --package typescript@5.8.3 tsc -p plugins/engineering-proxy/tsconfig.json
+      - run: git diff --exit-code -- plugins/engineering-proxy/dist/
+      - run: test -z "$(git status --porcelain -- plugins/engineering-proxy/dist/)"
+      - run: node plugins/engineering-proxy/test/benchmark.mjs
       - run: node --test plugins/engineering-proxy/test/*.test.js
       - run: node --check plugins/engineering-proxy/index.js
       - run: node --check plugins/engineering-proxy/check-changed.js
