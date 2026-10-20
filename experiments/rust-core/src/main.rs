@@ -25,7 +25,7 @@ fn run() -> Result<i32, String> {
 
     println!("{encoded}");
 
-    match result.status.as_str() {
+    match result.status {
         "FIX_REQUIRED" => Ok(1),
         "NOT_RUN" => Ok(2),
         _ => Ok(0),
