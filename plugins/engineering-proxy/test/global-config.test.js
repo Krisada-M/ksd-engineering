@@ -143,4 +143,4 @@ test("global mode applies to two repositories without cross-repo leakage", () =>
   setScopedMode(other, "repo", "balanced", options);
   assert.equal(loadConfig(repo, options).enforcement, "adaptive");
   assert.equal(loadConfig(other, options).enforcement, "balanced");
-});
+}));
