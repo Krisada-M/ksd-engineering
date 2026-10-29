@@ -1,11 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import createExtension from "../index.js";
 import { augmentSystemPrompt, buildPolicy, POLICY_MARKER } from "../policy.js";
 import { loadConfig, findProjectRoot } from "../config.js";
+
+// Set by test/helpers/isolated-home.js via `npm test`; never fall back to the real HOME (this file creates/deletes dirs under it).
+const isolatedHome = process.env.KSD_TEST_HOME;
+if (!isolatedHome || isolatedHome !== process.env.HOME || isolatedHome === userInfo().homedir) {
+  throw new Error("Run tests via `npm test` so HOME is isolated");
+}
 
 function harness(commandNames = ["ponytail"]) {
   const events = new Map();
@@ -22,6 +28,7 @@ function harness(commandNames = ["ponytail"]) {
   };
   createExtension(pi);
   const ctx = (cwd, idle = true) => ({ cwd, isIdle: () => idle, ui: { notify: (...args) => notices.push(args), setStatus: (...args) => statuses.push(args) } });
+
   return { events, commands, sent, notices, statuses, pi, ctx };
 }
 
@@ -91,6 +98,22 @@ test("findProjectRoot respects nested cwd and local policy", () => {
     assert.equal(findProjectRoot(join(dir, "src")), dir);
     assert.equal(loadConfig(join(dir, "src")).enabled, false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("findProjectRoot ignores the global ~/.omp agent dir but honours a project .omp", () => {
+  mkdirSync(join(isolatedHome, ".omp", "agent"), { recursive: true });
+  const base = mkdtempSync(join(isolatedHome, "work-"));
+  const work = join(base, "plain");
+  const project = join(base, "omp-project");
+  mkdirSync(work);
+  mkdirSync(join(project, ".omp"), { recursive: true });
+  mkdirSync(join(project, "src"));
+  try {
+    assert.equal(findProjectRoot(work), work, "HOME must not become a project root");
+    // cwd reached via its real path while HOME is a symlink (macOS tmp) must still not stop at HOME.
+    assert.equal(findProjectRoot(realpathSync(work)), realpathSync(work), "symlinked HOME must not become a project root");
+    assert.equal(findProjectRoot(join(project, "src")), project);
+  } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
 test("malformed JSON disables policy with explicit warning rather than crashing", () => {

@@ -1,4 +1,5 @@
-import { isAbsolute, relative, normalize } from "node:path";
+import { realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, normalize, resolve } from "node:path";
 
 /** Parse zero-context Git patches. Added lines only; deletion-only hunks are not enforceable. */
 export function parseChangedLines(patch) {
@@ -41,10 +42,31 @@ export function parseChangedLines(patch) {
   return files;
 }
 
-function reportPath(filename, cwd) {
+/** Resolve symlinks via the nearest existing ancestor; ESLint may report paths that no longer exist. */
+function canonical(path) {
+  const missing = [];
+  let current = resolve(path);
+  while (true) {
+    try {
+      return join(realpathSync(current), ...missing);
+    } catch {
+      // Not on disk (yet): resolve the parent instead.
+    }
+
+    const parent = dirname(current);
+    if (parent === current) return resolve(path);
+
+    missing.unshift(basename(current));
+    current = parent;
+  }
+}
+
+function reportPath(filename, realCwd) {
   if (typeof filename !== "string" || filename.length === 0) return null;
-  const local = isAbsolute(filename) ? relative(cwd, filename) : filename;
+  // macOS tmp dirs are symlinks (/var -> /private/var); compare canonical paths or files look out of scope.
+  const local = isAbsolute(filename) ? relative(realCwd, canonical(filename)) : filename;
   const value = normalize(local).replaceAll("\\", "/").replace(/^\.\//, "");
+
   return value === ".." || value.startsWith("../") ? null : value;
 }
 
@@ -62,8 +84,9 @@ export function inspectChangedScope(patch, eslintReport, { cwd = process.cwd() }
 
   if (!Array.isArray(eslintReport)) throw new TypeError("Expected ESLint JSON array");
   const reports = new Map();
+  const realCwd = canonical(cwd);
   for (const entry of eslintReport) {
-    const key = reportPath(entry?.filePath, cwd);
+    const key = reportPath(entry?.filePath, realCwd);
     if (!key || !Array.isArray(entry?.messages)) continue;
     reports.set(key, entry.messages);
   }

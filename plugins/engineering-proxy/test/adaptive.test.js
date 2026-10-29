@@ -31,6 +31,7 @@ function rig() {
       setStatus: (...args) => statuses.push(args),
     },
   });
+
   return { pi, events, commands, entries, notices, statuses, ctx };
 }
 
@@ -38,6 +39,7 @@ async function temp(fn) {
   const dir = mkdtempSync(join(tmpdir(), "ksd-adaptive-"));
   try {
     mkdirSync(join(dir, ".git"));
+
     return await fn(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });

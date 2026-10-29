@@ -8,10 +8,12 @@ function createRig() {
   const cache = new KsdRuntime(
     cwd => {
       counters.reads++;
+
       return { enabled, enforcement: "balanced", root: cwd };
     },
     config => {
       counters.policies++;
+
       return "Policy for " + config.enforcement;
     },
     () => false,
@@ -21,6 +23,7 @@ function createRig() {
     setStatus(key, value) { counters.statuses.push([key, value]); },
   };
   const ctx = { cwd: "/repo", ui };
+
   return { cache, counters, ctx, setEnabled(value) { enabled = value; } };
 }
 

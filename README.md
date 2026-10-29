@@ -1,6 +1,8 @@
-# KSD Engineering Proxy for OMP (v0.5.0)
+# KSD Engineering Proxy for OMP (v0.5.1)
 
-**Status:** v0.5.0 global/project/session mode inheritance stacked on v0.4.0 TypeScript performance changes. CI verifies release metadata, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
+**Status:** v0.5.1 hardening on top of v0.5.0 global/project/session mode inheritance and v0.4.0 TypeScript performance changes. CI (Ubuntu and macOS) verifies release metadata, the repository's own style rules via ESLint, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
+
+**v0.5.1 changes:** hermetic tests (isolated `HOME`); `check-changed` no longer reports a false `NOT_RUN` when paths differ only by symlinks (macOS `/var` vs `/private/var`); the global `~/.omp` directory is no longer treated as a project root; the repository now passes its own ESLint rules in CI. **Breaking (undocumented API):** the named export `syncStatus` was removed from `index.js`; use `KsdRuntime#syncStatus` from `dist/runtime.js`. OMP loads only the default export, so installed plugins are unaffected.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -56,7 +58,7 @@ All modes remain `balanced` or `adaptive`. The resolution order is **session ove
 
 Global file (automatically created on first global write): `~/.omp/agent/engineering-proxy.json`.
 
-Project file: `<repo>/.engineering-proxy.json`, resolved from the nearest ancestor with `.git` or `.omp`. Config files support `enabled:boolean` and `enforcement:"balanced"|"adaptive"`. Existing unknown keys are preserved on writes. Config updates use an atomic temporary file and rename. **Do not place secrets in these files.**
+Project file: `<repo>/.engineering-proxy.json`, resolved from the nearest ancestor with `.git` or `.omp` (the global `~/.omp` agent directory is not a project marker, so non-repo folders under HOME never write `~/.engineering-proxy.json`). Config files support `enabled:boolean` and `enforcement:"balanced"|"adaptive"`. Existing unknown keys are preserved on writes. Config updates use an atomic temporary file and rename. **Do not place secrets in these files.**
 
 Example global default:
 
@@ -107,14 +109,18 @@ KSD's hot path uses a **strict TypeScript** core at `plugins/engineering-proxy/s
 - Typed checks run during development/CI, not at OMP runtime, and generated JavaScript ships with the plugin. No runtime npm install is required for the performance core.
 - `node plugins/engineering-proxy/test/benchmark.mjs` produces an **illustrative** single-process comparison using synthetic repeated status+policy calls; it is not a live OMP speed measurement. Numerical performance targets are aspirational until validated in real sessions.
 
-To validate from the repository root:
+To validate from the repository root (dev tooling is pinned in the private root `package.json`; the published plugin has no runtime dependencies):
 
 ```bash
-npx --yes --package typescript@5.8.3 tsc -p plugins/engineering-proxy/tsconfig.json
+npm ci
+npm run lint
+npm run build
 git diff --exit-code -- plugins/engineering-proxy/dist/
-node --test plugins/engineering-proxy/test/*.test.js
+npm test
 node plugins/engineering-proxy/test/benchmark.mjs
 ```
+
+Tests isolate `HOME`, so a developer's real `~/.omp/agent/engineering-proxy.json` cannot change results.
 
 ## Deterministic changed-line diagnostics (opt-in)
 
@@ -163,8 +169,10 @@ At a review checkpoint inspect changed files; run existing repo `format:check`, 
 ## Testing
 
 ```bash
+npm ci
 node validate-release.js
-node --test plugins/engineering-proxy/test/*.test.js
+npm run lint
+npm test
 node --check plugins/engineering-proxy/index.js
 ```
 

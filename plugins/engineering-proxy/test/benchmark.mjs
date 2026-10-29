@@ -34,6 +34,7 @@ try {
 
   const percentile = (samples, p) => {
     const sorted = [...samples].sort((a, b) => a - b);
+
     return sorted[Math.ceil(sorted.length * p / 100) - 1];
   };
 

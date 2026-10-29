@@ -44,6 +44,7 @@ export class KsdRuntime {
 
     const next = this.loadConfig(cwd);
     this.configs.set(cwd, next);
+
     return next;
   }
 
@@ -54,6 +55,7 @@ export class KsdRuntime {
 
     const policy = this.buildPolicy(config);
     this.policies.set(key, policy);
+
     return policy;
   }
 

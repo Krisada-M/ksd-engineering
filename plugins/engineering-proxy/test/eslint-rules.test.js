@@ -7,6 +7,7 @@ function reportRule(name, enter, lines, statements) {
   const ctx = { sourceCode: { lines }, report: (entry) => reports.push(entry.messageId) };
   const visitor = rules[name].create(ctx);
   visitor[enter]({ body: statements });
+
   return reports;
 }
 

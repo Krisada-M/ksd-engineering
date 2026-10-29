@@ -3,7 +3,7 @@ import { augmentSystemPrompt, buildPolicy } from "./policy.js";
 import { KsdRuntime } from "./dist/runtime.js";
 
 const MODE_ENTRY = "engineering-proxy-mode";
-const defaultRuntime = new KsdRuntime(loadConfig, buildPolicy, () => process.env.ENGINEERING_PROXY_DISABLED === "1");
+const isDisabledByEnv = () => process.env.ENGINEERING_PROXY_DISABLED === "1";
 
 export function parseEngineeringCommand(input) {
   const words = String(input ?? "").trim().toLowerCase().split(/\s+/);
@@ -35,27 +35,23 @@ function sessionOverride(entries) {
 
 export function resolveSessionMode(entries, fallback = "balanced") {
   const defaultMode = SUPPORTED_MODES.includes(fallback) ? fallback : "balanced";
-  return sessionOverride(entries) ?? defaultMode;
-}
 
-/** Typed in-process implementation with cached configuration and deduplicated status writes. */
-export function syncStatus(ctx, isActive = false, mode = "balanced") {
-  const validMode = SUPPORTED_MODES.includes(mode) ? mode : "balanced";
-  defaultRuntime.syncStatus(ctx, isActive, validMode);
+  return sessionOverride(entries) ?? defaultMode;
 }
 
 const REVIEW_INSTRUCTIONS = `Review the current requested change as Engineering Proxy. First inspect the actual diff and relevant callers/contracts. Use Ponytail's ponytail-review skill exactly once IF it is available and a review is appropriate; do not re-run equivalent simplification review. Check the applicable SDLC stages: Requirements/acceptance criteria, Design/contracts, Implementation quality, Verification evidence and Delivery risks. Scale scrutiny to the change, with stronger security and integration gates for authentication, payments, migrations and concurrency. Independently verify requested personal style (guard clauses, flat-by-default control flow, blank before return, blank between functions), repo conventions, type safety, critical invariants, and changed-scope tests. Reuse existing formatter/linter/test commands when possible; do not add dependencies or edit unrelated files. Mark each applicable gate VERIFIED/PARTIAL/BLOCKED/NOT RUN with the exact command and observed result. A test skipped without required environment is NOT RUN, not PASS. A CI YAML file is not proof its job exercised the change; request a successful relevant CI run. Never label a release SHIP/GO with unresolved required or security gates. Never push, merge, deploy, or change production. Do not report a pass you did not observe.`;
 
 export function createExtension(pi, { globalConfigPath } = {}) {
   pi.setLabel?.("Engineering Proxy");
-  const runtime = globalConfigPath
-    ? new KsdRuntime(cwd => loadConfig(cwd, { globalConfigPath }), buildPolicy, () => process.env.ENGINEERING_PROXY_DISABLED === "1")
-    : defaultRuntime;
+  // One runtime per extension instance: caches must not leak between hosts or tests.
+  const runtime = new KsdRuntime(cwd => loadConfig(cwd, { globalConfigPath }), buildPolicy, isDisabledByEnv);
 
   let isActive = false;
   let selectedSessionMode = null;
   const effectiveMode = config => selectedSessionMode ?? config.enforcement;
+
   const refreshConfig = ctx => runtime.getConfig(ctx?.cwd ?? process.cwd(), true);
+
   const updateStatus = (ctx, config) => runtime.syncStatus(ctx, isActive, effectiveMode(config));
 
   function restoreSession(ctx) {
@@ -93,6 +89,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
     if (!config.enabled || process.env.ENGINEERING_PROXY_DISABLED === "1") {
       const sections = event?.systemPromptOptions?.sections;
       if (sections && typeof sections === "object") delete sections["engineering-proxy"];
+
       return;
     }
 
@@ -108,12 +105,14 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
       if (parsed.type === "invalid") {
         ctx.ui?.notify?.("Usage: /engineering-proxy [status|balanced|adaptive|reset|global <balanced|adaptive|reset>|repo <balanced|adaptive|reset>]", "warning");
+
         return;
       }
 
       if (parsed.type === "set-mode" || parsed.type === "reset-session") {
         if (!enabled && parsed.type === "set-mode") {
           ctx.ui?.notify?.("Engineering Proxy is disabled; mode unchanged.", "warning");
+
           return;
         }
 
@@ -131,6 +130,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         updateStatus(ctx, config);
         const effective = effectiveMode(config);
         ctx.ui?.notify?.(`KSD mode: ${effective.toUpperCase()} (${persisted ? "saved in session" : "runtime only; session persistence unavailable"})`, persisted ? "info" : "warning");
+
         return;
       }
 
@@ -144,6 +144,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         } catch (error) {
           ctx.ui?.notify?.(`KSD ${parsed.scope} update failed: ${error.message}`, "warning");
         }
+
         return;
       }
 
@@ -162,6 +163,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
       updateStatus(ctx, config);
       if (!config.enabled || process.env.ENGINEERING_PROXY_DISABLED === "1") {
         ctx.ui?.notify?.("Engineering Proxy is disabled for this project", "warning");
+
         return;
       }
       const scope = typeof args === "string" && args.trim() ? `\nReview scope: ${args.trim()}` : "";

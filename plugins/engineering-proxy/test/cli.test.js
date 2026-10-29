@@ -21,6 +21,7 @@ function run(report) {
       filePath: join(dir, "src/one.ts"),
       messages: r.messages,
     }))));
+
     return spawnSync(process.execPath, [script, "--diff", "diff.patch", "--eslint-report", "eslint.json"], {
       cwd: dir,
       encoding: "utf8",

@@ -41,6 +41,7 @@ function rig(globalConfigPath) {
       notify: (...args) => notices.push(args),
     },
   });
+
   const command = (args, context) => commands.get("engineering-proxy").handler(args, context);
 
   return { events, commands, entries, notices, statuses, ctx, command };

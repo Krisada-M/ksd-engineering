@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parseChangedLines, inspectChangedScope } from "../change-scope.js";
 import { assessReview } from "../review-verdict.js";
 
@@ -129,4 +132,21 @@ test("fatal parser errors cannot be hidden by changed-line filtering", () => {
   const result = inspectChangedScope(patch, report, { cwd: "/work" });
   assert.equal(result.status, "FIX_REQUIRED");
   assert.equal(result.diagnostics[0].message, "Parsing error");
+});
+
+test("symlinked cwd still matches ESLint paths reported under the real directory", () => {
+  const real = realpathSync(mkdtempSync(join(tmpdir(), "ksd-real-")));
+  const link = `${real}-link`;
+  symlinkSync(real, link, "dir");
+  try {
+    const report = [{ filePath: join(real, "src/user.ts"), messages: [
+      { line: 4, severity: 2, ruleId: "ksd/blank-between-functions", message: "Spacing" },
+    ] }];
+    const viaLink = inspectChangedScope(patch, report, { cwd: link });
+    assert.equal(viaLink.status, "FIX_REQUIRED", "symlink mismatch must not degrade to NOT_RUN");
+    assert.deepEqual(viaLink.missingFiles, []);
+  } finally {
+    rmSync(link, { force: true });
+    rmSync(real, { recursive: true, force: true });
+  }
 });

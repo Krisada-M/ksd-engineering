@@ -6,6 +6,7 @@ export function hasEvidence(gate) {
   if (e.type === "command") return typeof e.command === "string" && !!e.command.trim() && typeof e.result === "string" && !!e.result.trim();
   if (e.type === "source") return typeof e.path === "string" && !!e.path.trim() && typeof e.observation === "string" && !!e.observation.trim();
   if (e.type === "ci-run") return typeof e.url === "string" && /^https:\/\//.test(e.url) && e.conclusion === "success";
+
   return false;
 }
 
