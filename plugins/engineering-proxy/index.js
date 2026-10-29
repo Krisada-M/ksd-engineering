@@ -130,7 +130,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
         updateStatus(ctx, config);
         const effective = effectiveMode(config);
-        ctx.ui?.notify?.`KSD mode: ${effective.toUpperCase()} (${persisted ? "saved in session" : "runtime only; session persistence unavailable"})`, persisted ? "info" : "warning");
+        ctx.ui?.notify?.(`KSD mode: ${effective.toUpperCase()} (${persisted ? "saved in session" : "runtime only; session persistence unavailable"})`, persisted ? "info" : "warning");
         return;
       }
 
