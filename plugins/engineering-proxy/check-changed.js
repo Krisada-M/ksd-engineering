@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { inspectChangedScope } from "./change-scope.js";
 
 function main(args) {
@@ -17,9 +18,23 @@ function main(args) {
   if (result.status === "NOT_RUN") process.exitCode = 2;
 }
 
-try {
-  main(process.argv.slice(2));
-} catch (error) {
-  process.stderr.write("KSD style check NOT RUN: " + error.message + "\n");
-  process.exitCode = 2;
+// Compare REAL paths so npm .bin symlinks still execute the CLI; unresolvable argv means NOT main.
+function isMainModule() {
+  try {
+
+    if (!process.argv[1]) return false;
+
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    process.stderr.write("KSD style check NOT RUN: " + error.message + "\n");
+    process.exitCode = 2;
+  }
 }

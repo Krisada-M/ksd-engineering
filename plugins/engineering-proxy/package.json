@@ -4,6 +4,16 @@
   "type": "module",
   "license": "MIT",
   "description": "Repo-adaptive engineering policy extension for OMP, compatible with Ponytail",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./eslint": "./eslint-rules/index.js",
+    "./*": "./*"
+  },
+  "bin": {
+    "ksd-check-changed": "./check-changed.js",
+    "ksd-review-verdict": "./review-verdict.js"
+  },
   "engines": {
     "node": ">=20"
   },

@@ -45,12 +45,42 @@ test("hot-path config is cached until a deliberate refresh", () => {
 
 test("policy construction caches per mode without leaking between modes", () => {
   const r = createRig();
-  const config = r.cache.getConfig("/repo");
-  assert.equal(r.cache.getPolicy(config), "Policy for balanced");
-  assert.equal(r.cache.getPolicy(config), "Policy for balanced");
-  assert.equal(r.cache.getPolicy({ ...config, enforcement: "adaptive" }), "Policy for adaptive");
-  assert.equal(r.cache.getPolicy(config), "Policy for balanced");
+  assert.equal(r.cache.getPolicy("balanced"), "Policy for balanced");
+  assert.equal(r.cache.getPolicy("balanced"), "Policy for balanced");
+  assert.equal(r.cache.getPolicy("adaptive"), "Policy for adaptive");
+  assert.equal(r.cache.getPolicy("balanced"), "Policy for balanced");
   assert.equal(r.counters.policies, 2);
+});
+
+test("status notice participates in redraw and clears after recovery", () => {
+  const r = createRig();
+  r.cache.syncStatus(r.ctx, false, "balanced", "warn: stale");
+  r.cache.syncStatus(r.ctx, false, "balanced", "warn: stale");
+  assert.equal(r.counters.statuses.length, 1, "identical notice keeps TUI silent");
+  assert.match(r.counters.statuses[0][1], /warn: stale/);
+
+  r.cache.syncStatus(r.ctx, false, "balanced");
+  assert.equal(r.counters.statuses.length, 2, "cleared notice redraws once");
+  assert.doesNotMatch(r.counters.statuses[1][1], /warn/);
+  r.cache.syncStatus(r.ctx, false, "balanced");
+  assert.equal(r.counters.statuses.length, 2, "cleared state is stable afterwards");
+});
+
+test("two runtimes with different loaders never share config or policy caches", () => {
+  const readsA = [];
+  const readsB = [];
+  const a = new KsdRuntime(cwd => (readsA.push(cwd), { enabled: true, enforcement: "balanced" }), () => "policy A", () => false);
+  const b = new KsdRuntime(cwd => (readsB.push(cwd), { enabled: false, enforcement: "adaptive" }), () => "policy B", () => false);
+
+  assert.equal(a.getPolicy("balanced"), "policy A");
+  assert.equal(b.getPolicy("adaptive"), "policy B");
+  a.getConfig("/shared", true);
+  b.getConfig("/shared", true);
+  assert.deepEqual(readsA, ["/shared"]);
+  assert.deepEqual(readsB, ["/shared"]);
+  a.getPolicy("adaptive");
+  b.getPolicy("balanced");
+  assert.notEqual(a.getPolicy("adaptive"), b.getPolicy("adaptive"));
 });
 
 test("duplicate status updates do not call OMP TUI again", () => {

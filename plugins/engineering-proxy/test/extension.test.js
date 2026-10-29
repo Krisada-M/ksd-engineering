@@ -136,7 +136,8 @@ test("review only starts on explicit command, one request per trigger, and queue
     await h.commands.get("engineering-review").handler("apps/web/features/auth", h.ctx(dir, false));
     assert.equal(h.sent.length, 1);
     assert.match(h.sent[0].message, /apps\/web\/features\/auth/);
-    assert.match(h.sent[0].message, /Check the applicable SDLC stages/);
+    assert.match(h.sent[0].message, /Scope: inspect the actual diff/);
+    assert.match(h.sent[0].message, /must not be invoked here unless the user separately requested it/);
     assert.deepEqual(h.sent[0].options, { deliverAs: "followUp" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

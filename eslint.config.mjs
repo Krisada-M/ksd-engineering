@@ -9,9 +9,9 @@ const rules = {
 };
 
 export default [
-  { ignores: ["plugins/engineering-proxy/dist/**", "node_modules/**", "graft/**", ".gitnexus/**", ".codegraph/**", ".omp/**", ".claude/**"] },
+  { ignores: ["plugins/engineering-proxy/dist/**", "node_modules/**", "graft/**", ".gitnexus/**", ".codegraph/**", ".omp/**", ".claude/**", "plugins/engineering-proxy/test/eval/fixtures/**"] },
   {
-    files: ["**/*.{js,mjs}"],
+    files: ["**/*.{js,mjs,cjs,jsx}"],
     plugins: { "engineering-proxy": engineeringProxy },
     rules,
   },

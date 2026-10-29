@@ -9,16 +9,18 @@ jobs:
       matrix:
         # macOS is the primary dev platform; its /var -> /private/var tmp symlink exposed a NOT_RUN bug ubuntu could not.
         os: [ubuntu-latest, macos-latest]
+        node: ['22.13.0', '24']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: node validate-release.js
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build
       - run: git diff --exit-code -- plugins/engineering-proxy/dist/
       - run: test -z "$(git status --porcelain -- plugins/engineering-proxy/dist/)"
@@ -26,3 +28,17 @@ jobs:
       - run: npm test
       - run: node --check plugins/engineering-proxy/index.js
       - run: node --check plugins/engineering-proxy/check-changed.js
+      # Ensure the submitted source+dist pair is internally consistent: a second build must be byte-stable.
+      - run: npm run build && git diff --exit-code -- plugins/engineering-proxy/dist/
+
+  runtime-floor:
+    # Dependency-free import smoke on the plugin's declared Node >=20 floor (no root install/lint there).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20.0.0'
+      - run: node --input-type=module -e "const { KsdRuntime } = await import('./plugins/engineering-proxy/dist/runtime.js'); console.log(typeof KsdRuntime); if (typeof KsdRuntime !== 'function') process.exit(1);"
+      - run: node --input-type=module -e "await import('./plugins/engineering-proxy/dist/policy.js'); await import('./plugins/engineering-proxy/dist/sdlc.js'); console.log('policy+sdlc import ok')"
+      - run: node --input-type=module -e "await import('./plugins/engineering-proxy/config.js'); await import('./plugins/engineering-proxy/review-verdict.js'); console.log('config+review-verdict import ok')"
