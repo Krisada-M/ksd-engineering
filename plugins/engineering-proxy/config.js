@@ -1,25 +1,39 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-export const SUPPORTED_MODES = Object.freeze(["balanced", "adaptive"]);
+// Single source of truth for the supported modes; exported under the historical name.
+import { KSD_MODES } from "./sdlc.js";
+export const SUPPORTED_MODES = KSD_MODES;
 const DEFAULT = Object.freeze({ enabled: true, enforcement: "balanced" });
 
 export function getGlobalConfigPath() {
   return join(homedir(), ".omp", "agent", "engineering-proxy.json");
 }
 
+function realPath(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
 export function findProjectRoot(cwd) {
+  // Compare real paths: HOME or cwd may be reached through a symlink (process.cwd() is always real).
+  const home = realPath(resolve(homedir()));
   let current = resolve(cwd);
   while (true) {
-    if (existsSync(join(current, ".git")) || existsSync(join(current, ".omp"))) return current;
+    if (existsSync(join(current, ".git"))) return current;
+    // ~/.omp holds global agent state; treating it as a project marker turns HOME into a second global scope.
+    // Test .omp existence first: realpath is only needed for ancestors that actually have the marker.
+    if (existsSync(join(current, ".omp")) && realPath(current) !== home) return current;
     const parent = dirname(current);
     if (parent === current) return resolve(cwd);
     current = parent;
   }
 }
-
 
 function readScopedConfig(path, label) {
   if (!existsSync(path)) return { present: false, values: {} };

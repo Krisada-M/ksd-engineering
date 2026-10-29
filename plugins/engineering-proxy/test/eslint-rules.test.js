@@ -1,70 +1,130 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Linter } from "eslint";
+import tseslint from "typescript-eslint";
 import { rules } from "../eslint-rules/index.js";
 
-function reportRule(name, enter, lines, statements) {
-  const reports = [];
-  const ctx = { sourceCode: { lines }, report: (entry) => reports.push(entry.messageId) };
-  const visitor = rules[name].create(ctx);
-  visitor[enter]({ body: statements });
-  return reports;
+const linter = new Linter();
+const pluginName = "engineering-proxy";
+const styleRules = {
+  [`${pluginName}/blank-before-return`]: "error",
+  [`${pluginName}/blank-between-functions`]: "error",
+  [`${pluginName}/prefer-guard-clauses`]: "warn",
+};
+
+function config(fileName) {
+  return [{
+    files: [`**/${fileName ?? "*.js"}`],
+    plugins: { [pluginName]: { rules } },
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+    },
+    rules: styleRules,
+  }];
 }
 
-function node(type, start, end, props = {}) {
-  return { type, loc: { start: { line: start }, end: { line: end } }, ...props };
+function lint(code, fileName) {
+  return linter.verify(code, config(fileName), fileName ?? "fixture.js");
 }
 
-test("blank-between-functions spots missing separator and accepts exactly one", () => {
-  const statements = [node("FunctionDeclaration", 1, 1, { body: {} }), node("FunctionDeclaration", 2, 2, { body: {} })];
-  assert.deepEqual(reportRule("blank-between-functions", "Program", ["function a() {}", "function b() {}"], statements), ["missing"]);
-  const spaced = [statements[0], node("FunctionDeclaration", 3, 3, { body: {} })];
-  assert.deepEqual(reportRule("blank-between-functions", "Program", ["function a() {}", "", "function b() {}"], spaced), []);
+function messagesOf(results, ruleOrWarn) {
+  return results
+    .filter(m => ruleOrWarn ? m.messageId === ruleOrWarn : true)
+    .map(m => `${m.ruleId}:${m.messageId}`);
+}
+
+test("RuleTester-equivalent: declarations, exports and arrows all report missing separators", () => {
+  const code = [
+    "function alpha() {",
+    "  return 1;",
+    "}",
+    "function beta() {",
+    "  return 2;",
+    "}",
+    "export function gamma() {",
+    "  return 3;",
+    "}",
+    "const delta = () => 4;",
+    "const eps = () => 5;",
+  ].join("\n");
+  const messages = messagesOf(lint(code), "missing");
+  // alpha|beta, beta|gamma, gamma|delta, delta|eps = 4 blank-between-functions + none from arrows' insides
+  assert.equal(messages.filter(m => m.startsWith(`${pluginName}/blank-between-functions`)).length, 4);
 });
 
-test("blank-between-functions accepts arrow-function definitions", () => {
-  const arrow = (line) => node("VariableDeclaration", line, line, { declarations: [{ init: { type: "ArrowFunctionExpression" } }] });
-  assert.deepEqual(reportRule("blank-between-functions", "Program", ["const a = () => 1;", "const b = () => 2;"], [arrow(1), arrow(2)]), ["missing"]);
+test("TS overload groups stay untouched and full members still need exactly one blank", () => {
+  const code = [
+    "export function sized(target: string): string;",
+    "export function sized(target: number): number;",
+    "export function sized(target: string | number): string | number {",
+    "  return target;",
+    "}",
+  ].join("\n");
+  const messages = messagesOf(lint(code, "fixture.ts"));
+  assert.deepEqual(messages, []);
+  assert.equal(lint(code, "fixture.ts").every(m => m.fatal !== true), true);
 });
 
-test("prefer-guard-clauses warns but cannot mutate", () => {
-  const warnings = [];
-  const visitor = rules["prefer-guard-clauses"].create({ report: (msg) => warnings.push(msg.messageId) });
-  visitor.IfStatement({ alternate: null, consequent: { type: "BlockStatement", body: [{ type: "IfStatement" }] } });
-  assert.deepEqual(warnings, ["nested"]);
-  assert.equal(rules["prefer-guard-clauses"].meta.fixable, undefined);
+test("first-statement guard return has no leading blank; later returns need exactly one", () => {
+  const clean = [
+    "function pick(minus) {",
+    "  if (minus < 0) return null;",
+    "  if (minus === 0) return null;",
+    "",
+    "  return { value: minus };",
+    "}",
+    "",
+    "function after() {",
+    "  return minus(1);",
+    "  function minus(x) { return x; }",
+    "}",
+  ].join("\n");
+  assert.deepEqual(messagesOf(lint(clean)), []);
 });
 
-test("blank-before-return skips first-statement guard clauses", () => {
-  const reports = [];
-  const context = { sourceCode: { lines: ["if (x) {", "  return x;", "}"] }, report: (entry) => reports.push(entry) };
-  const ret = node("ReturnStatement", 2, 2);
-  ret.parent = { body: [ret] };
-  rules["blank-before-return"].create(context).ReturnStatement(ret);
-  assert.deepEqual(reports, []);
+test("exactly-one blank enforced: zero and two are both errors, comments block false positives", () => {
+  const zero = "function a() {\n  return 1;\n}\nfunction b() {\n  return 1;\n}";
+  const two = "function a() {\n  return 1;\n}\n\n\nfunction b() {\n  return 1;\n}";
+  assert.equal(messagesOf(lint(zero), "missing").length, 1);
+  assert.equal(messagesOf(lint(two), "extra").length, 1);
+
+  const commented = "function a() {\n  return 1;\n}\n// linking comment\nfunction b() {\n  return 1;\n}";
+  assert.deepEqual(messagesOf(lint(commented)), [], "comments between functions are respected, not spacing errors");
 });
 
-test("blank-before-return flags return directly after prior statement", () => {
-  const reports = [];
-  const context = { sourceCode: { lines: ["const a = 1;", "return a;"] }, report: (entry) => reports.push(entry.messageId) };
-  const previous = node("VariableDeclaration", 1, 1);
-  const ret = node("ReturnStatement", 2, 2);
-  ret.parent = { body: [previous, ret] };
-  rules["blank-before-return"].create(context).ReturnStatement(ret);
-  assert.deepEqual(reports, ["missing"]);
+test("prefer-guard-clauses is warning-only with no autofix, and deep nesting stays single-message", () => {
+  const code = [
+    "function shallow(list) {",
+    "  if (list) {",
+    "    if (list.length > 0) {",
+    "      return list;",
+    "    }",
+    "  }",
+    "  return [];",
+    "}",
+  ].join("\n");
+  const messages = lint(code);
+  const nested = messages.filter(m => m.ruleId === `${pluginName}/prefer-guard-clauses`);
+  assert.equal(nested.length, 1);
+  assert.equal(rules["prefer-guard-clauses"].meta.fixable, undefined, "no unsafe semantic autofix");
 });
 
-
-test("blank-between-functions detects exported function declarations", () => {
-  const wrap = (line) => node("ExportNamedDeclaration", line, line, { declaration: node("FunctionDeclaration", line, line, { body: {} }) });
-  assert.deepEqual(reportRule("blank-between-functions", "Program", ["export function a() {}", "export function b() {}"], [wrap(1), wrap(2)]), ["missing"]);
-});
-
-test("blank-before-return enforces exactly one blank line", () => {
-  const lines = ["const a = 1;", "", "", "return a;"];
-  const previous = node("VariableDeclaration", 1, 1);
-  const ret = node("ReturnStatement", 4, 4);
-  ret.parent = { body: [previous, ret] };
-  const reports = [];
-  rules["blank-before-return"].create({ sourceCode: { lines }, report: (e) => reports.push(e.messageId) }).ReturnStatement(ret);
-  assert.deepEqual(reports, ["extra"]);
+test("style rules leave unrelated spacing and TS overloads alone end-to-end", () => {
+  const code = [
+    "type Priced = { vip: boolean; subtotal: number };",
+    "",
+    "export function price(input: number): number;",
+    "export function price(input: string): string;",
+    "export function price(input: number | string): number | string {",
+    "  const raw = typeof input === 'string' ? Number(input) : input;",
+    "  if (raw < 0) {",
+    "    return 0;",
+    "  }",
+    "",
+    "  return raw;",
+    "}",
+  ].join("\n");
+  assert.deepEqual(messagesOf(lint(code, "fixture.ts")), []);
 });

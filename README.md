@@ -1,6 +1,8 @@
-# KSD Engineering Proxy for OMP (v0.5.0)
+# KSD Engineering Proxy for OMP (v0.5.1)
 
-**Status:** v0.5.0 global/project/session mode inheritance stacked on v0.4.0 TypeScript performance changes. CI verifies release metadata, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
+**Status:** v0.5.1 hardening on top of v0.5.0 global/project/session mode inheritance and v0.4.0 TypeScript performance changes. CI (Ubuntu and macOS) verifies release metadata, the repository's own style rules via ESLint, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
+
+**v0.5.1 changes:** hermetic tests (isolated `HOME`); `check-changed` no longer reports a false `NOT_RUN` when paths differ only by symlinks (macOS `/var` vs `/private/var`); the global `~/.omp` directory is no longer treated as a project root; the repository now passes its own ESLint rules in CI. **Breaking (undocumented API):** the named export `syncStatus` was removed from `index.js`; use `KsdRuntime#syncStatus` from `dist/runtime.js`. OMP loads only the default export, so installed plugins are unaffected.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -56,7 +58,7 @@ All modes remain `balanced` or `adaptive`. The resolution order is **session ove
 
 Global file (automatically created on first global write): `~/.omp/agent/engineering-proxy.json`.
 
-Project file: `<repo>/.engineering-proxy.json`, resolved from the nearest ancestor with `.git` or `.omp`. Config files support `enabled:boolean` and `enforcement:"balanced"|"adaptive"`. Existing unknown keys are preserved on writes. Config updates use an atomic temporary file and rename. **Do not place secrets in these files.**
+Project file: `<repo>/.engineering-proxy.json`, resolved from the nearest ancestor with `.git` or `.omp` (the global `~/.omp` agent directory is not a project marker, so non-repo folders under HOME never write `~/.engineering-proxy.json`). Config files support `enabled:boolean` and `enforcement:"balanced"|"adaptive"`. Existing unknown keys are preserved on writes. Config updates use an atomic temporary file and rename. **Do not place secrets in these files.**
 
 Example global default:
 
@@ -107,14 +109,18 @@ KSD's hot path uses a **strict TypeScript** core at `plugins/engineering-proxy/s
 - Typed checks run during development/CI, not at OMP runtime, and generated JavaScript ships with the plugin. No runtime npm install is required for the performance core.
 - `node plugins/engineering-proxy/test/benchmark.mjs` produces an **illustrative** single-process comparison using synthetic repeated status+policy calls; it is not a live OMP speed measurement. Numerical performance targets are aspirational until validated in real sessions.
 
-To validate from the repository root:
+To validate from the repository root (dev tooling is pinned in the private root `package.json`; the published plugin has no runtime dependencies):
 
 ```bash
-npx --yes --package typescript@5.8.3 tsc -p plugins/engineering-proxy/tsconfig.json
+npm ci
+npm run lint
+npm run build
 git diff --exit-code -- plugins/engineering-proxy/dist/
-node --test plugins/engineering-proxy/test/*.test.js
+npm test
 node plugins/engineering-proxy/test/benchmark.mjs
 ```
+
+Tests isolate `HOME`, so a developer's real `~/.omp/agent/engineering-proxy.json` cannot change results.
 
 ## Deterministic changed-line diagnostics (opt-in)
 
@@ -131,13 +137,17 @@ Use in CI only after the host project explicitly adopts the ESLint rule config. 
 
 ## Evidence-aware review verdicts (opt-in)
 
-`review-verdict.js` exports `assessReview({scope, gates})` to assess a **provided** gate report. A VERIFIED gate requires a specific command result, source observation, or a successful CI run reference. `ci-parity` cannot be VERIFIED by finding a workflow file; its reported evidence must be of type `ci-run`. Missing critical evidence or failed required gates produce NO_GO; missing noncritical review evidence produces CONDITIONAL_GO, while release scope remains NO_GO.
+`review-verdict.js` exports `assessReview({scope, gates, requiredGates, reviewedCommit})` to assess a **provided** gate report. Declare applicable required and critical gates explicitly; omitted declared gates become NOT_RUN. Execution gates require command, working directory, result and successful exit code; `tests` additionally requires structured pass/fail/skip counts. Skipped tests cannot yield VERIFIED. `ci-parity` requires a successful HTTPS CI-run reference with a head SHA matching `reviewedCommit`. Missing critical evidence or failed required gates produce NO_GO; missing noncritical review evidence produces CONDITIONAL_GO, while release scope remains NO_GO.
+
+Run `ksd-review-verdict --report report.json` after installing the companion package, or `node plugins/engineering-proxy/review-verdict.js --report report.json` from this checkout. Exit 0 indicates READY_FOR_REVIEW or RELEASE_CANDIDATE, 1 indicates NO_GO or CONDITIONAL_GO, and 2 indicates NOT_ASSESSED or invalid input.
 
 This is a **report validator**, not a CI provider connector: supplied evidence is not independently authenticated, a good verdict does not authorize merge or deploy, and reviews must examine actual runtime/test results before marking a gate VERIFIED.
 
 ## Repo-adaptive style enforcement
 
 `before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["engineering-proxy"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.engineering-proxy.json` is optional (see `examples/`), supports `enabled:boolean` and `enforcement: "balanced"|"adaptive"`. The repository default inherits the global config when absent (or balanced if both are absent); explicit session mode commands override both. Existing unrelated settings are untouched.
+
+Fallback string and array prompts are reconciled when enabled or disabled. An unterminated legacy string block is preserved rather than guessed; the extension warns that the session must be restarted.
 
 **Important:** OMP policy injection is guidance, not a deterministic test. To enforce your preferences at commit/CI, opt into `plugins/engineering-proxy/eslint-rules/index.js` from your existing ESLint flat config. No ESLint config is overwritten. Rules:
 
@@ -146,6 +156,10 @@ This is a **report validator**, not a CI provider connector: supplied evidence i
 - `prefer-guard-clauses`: warning only, no semantic autofix.
 
 No automatic formatting or rewrites. The ESLint rules are not automatically enabled by installing the OMP plugin. Avoid adding a second linter if the repository has an authoritative existing formatting convention; align with it first.
+
+### Install the optional companion
+
+Create a tarball with `npm pack ./plugins/engineering-proxy --ignore-scripts` and install that tarball in the host repository. The private repository root is not the package. Import `omp-engineering-proxy/eslint` in the host's existing ESLint flat config and supply its own parser for TypeScript or JSX. The package also exposes `ksd-check-changed` and `ksd-review-verdict`; neither runs checks automatically.
 
 ### Quality gates
 
@@ -163,8 +177,10 @@ At a review checkpoint inspect changed files; run existing repo `format:check`, 
 ## Testing
 
 ```bash
+npm ci
 node validate-release.js
-node --test plugins/engineering-proxy/test/*.test.js
+npm run lint
+npm test
 node --check plugins/engineering-proxy/index.js
 ```
 

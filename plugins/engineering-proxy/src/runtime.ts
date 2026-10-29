@@ -1,4 +1,6 @@
 /** In-process hot-path engine. No native processes, filesystem access or LLM calls. */
+import type { KsdMode } from "./sdlc.js";
+
 export interface KsdConfig {
   readonly enabled: boolean;
   readonly enforcement: "balanced" | "adaptive";
@@ -22,10 +24,10 @@ export interface KsdContext {
 }
 
 type LoadConfig = (cwd: string) => KsdConfig;
-type BuildPolicy = (config: KsdConfig) => string;
+type BuildPolicy = (config: { enforcement: KsdMode }) => string;
 type IsDisabled = () => boolean;
 
-type StatusCache = { value: string | undefined; theme: KsdTheme | undefined };
+type StatusCache = { value: string | undefined; theme: KsdTheme | undefined; notice?: string };
 
 export class KsdRuntime {
   private readonly configs = new Map<string, KsdConfig>();
@@ -44,16 +46,18 @@ export class KsdRuntime {
 
     const next = this.loadConfig(cwd);
     this.configs.set(cwd, next);
+
     return next;
   }
 
-  getPolicy(config: KsdConfig): string {
-    const key = config.enforcement;
-    const existing = this.policies.get(key);
+  getPolicy(mode: KsdMode): string {
+    const existing = this.policies.get(mode);
     if (existing !== undefined) return existing;
 
-    const policy = this.buildPolicy(config);
-    this.policies.set(key, policy);
+    // The single-field config object is allocated only on a two-mode cache miss.
+    const policy = this.buildPolicy({ enforcement: mode });
+    this.policies.set(mode, policy);
+
     return policy;
   }
 
@@ -62,7 +66,7 @@ export class KsdRuntime {
     if (ui) this.statuses.delete(ui);
   }
 
-  syncStatus(ctx: KsdContext | undefined, isActive: boolean, mode: KsdConfig["enforcement"]): void {
+  syncStatus(ctx: KsdContext | undefined, isActive: boolean, mode: KsdConfig["enforcement"], notice?: string): void {
     const ui = ctx?.ui;
     if (typeof ui?.setStatus !== "function" || !ctx?.cwd) return;
 
@@ -88,13 +92,15 @@ export class KsdRuntime {
           // Theme rendering is optional.
         }
         status = `${colored} 🛡 KSD: ${mode.toUpperCase()}`;
+        if (notice) status += `; ${notice}`;
       }
+      else if (notice) status = `⚠ KSD: ${notice}`;
 
       const before = this.statuses.get(ui);
       if (before && before.value === status && before.theme === theme) return;
 
       ui.setStatus("engineering-proxy", status);
-      this.statuses.set(ui, { value: status, theme });
+      this.statuses.set(ui, { value: status, theme, notice });
     } catch {
       // Decorative UI must never cause a coding session to fail.
     }

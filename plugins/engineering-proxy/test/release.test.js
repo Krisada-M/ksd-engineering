@@ -18,6 +18,7 @@ function fixture({ metadata = "0.2.0", plugin = "0.2.0", packageVersion = "0.2.0
     omp: { extensions: ["./index.js"] },
   }));
   writeFileSync(join(root, "plugins/engineering-proxy/index.js"), "export default () => {};");
+
   return root;
 }
 

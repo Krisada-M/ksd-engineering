@@ -1,4 +1,5 @@
 /** In-process hot-path engine. No native processes, filesystem access or LLM calls. */
+import type { KsdMode } from "./sdlc.js";
 export interface KsdConfig {
     readonly enabled: boolean;
     readonly enforcement: "balanced" | "adaptive";
@@ -18,7 +19,9 @@ export interface KsdContext {
     readonly ui?: KsdUi;
 }
 type LoadConfig = (cwd: string) => KsdConfig;
-type BuildPolicy = (config: KsdConfig) => string;
+type BuildPolicy = (config: {
+    enforcement: KsdMode;
+}) => string;
 type IsDisabled = () => boolean;
 export declare class KsdRuntime {
     private readonly loadConfig;
@@ -29,9 +32,9 @@ export declare class KsdRuntime {
     private readonly statuses;
     constructor(loadConfig: LoadConfig, buildPolicy: BuildPolicy, isDisabled: IsDisabled);
     getConfig(cwd: string, refresh?: boolean): KsdConfig;
-    getPolicy(config: KsdConfig): string;
+    getPolicy(mode: KsdMode): string;
     /** Redraw after session/UI resets even if status text is unchanged. */
     invalidateStatus(ui?: KsdUi): void;
-    syncStatus(ctx: KsdContext | undefined, isActive: boolean, mode: KsdConfig["enforcement"]): void;
+    syncStatus(ctx: KsdContext | undefined, isActive: boolean, mode: KsdConfig["enforcement"], notice?: string): void;
 }
 export {};

@@ -1,9 +1,19 @@
 {
   "name": "omp-engineering-proxy",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "license": "MIT",
   "description": "Repo-adaptive engineering policy extension for OMP, compatible with Ponytail",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./eslint": "./eslint-rules/index.js",
+    "./*": "./*"
+  },
+  "bin": {
+    "ksd-check-changed": "./check-changed.js",
+    "ksd-review-verdict": "./review-verdict.js"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -18,8 +28,6 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "typecheck": "npx --yes --package typescript@5.8.3 tsc --noEmit -p tsconfig.json",
-    "build": "npx --yes --package typescript@5.8.3 tsc -p tsconfig.json"
+    "test": "node --import ./test/helpers/isolated-home.js --test test/*.test.js"
   }
 }

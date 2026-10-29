@@ -1,0 +1,20 @@
+{
+  "name": "ksd-engineering-dev",
+  "private": true,
+  "type": "module",
+  "description": "Development tooling for this repository only; the published plugin lives in plugins/engineering-proxy.",
+  "engines": {
+    "node": "^22.13.0 || >=24"
+  },
+  "scripts": {
+    "lint": "eslint --config eslint.config.mjs .",
+    "typecheck": "tsc --noEmit -p plugins/engineering-proxy/tsconfig.json",
+    "build": "tsc -p plugins/engineering-proxy/tsconfig.json",
+    "test": "node --import ./plugins/engineering-proxy/test/helpers/isolated-home.js --test plugins/engineering-proxy/test/*.test.js"
+  },
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

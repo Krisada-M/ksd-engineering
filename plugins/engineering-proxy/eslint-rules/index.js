@@ -8,6 +8,7 @@ function getTextAndGap(context, previous, next) {
   const between = source.lines.slice(begin, Math.max(begin, end - 1));
   const blankCount = between.filter(line => line.trim() === "").length;
   const containsOtherContent = between.some(line => line.trim() !== "");
+
   return { blankCount, containsOtherContent };
 }
 
@@ -21,6 +22,7 @@ function isFunction(node) {
   }
   if (node?.type === "FunctionDeclaration") return Boolean(node.body); // excludes TS overload signatures
   if (node?.type !== "VariableDeclaration") return false;
+
   return node.declarations?.length === 1 &&
     ["ArrowFunctionExpression", "FunctionExpression"].includes(node.declarations[0]?.init?.type);
 }
@@ -66,6 +68,7 @@ export const rules = {
           if (blankCount !== 1) context.report({ node: after, messageId: blankCount === 0 ? "missing" : "extra" });
         }
       }
+
       return {
         Program(node) { inspect(node.body); },
         BlockStatement(node) { inspect(node.body); },
