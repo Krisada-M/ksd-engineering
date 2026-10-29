@@ -1,6 +1,6 @@
-# KSD Engineering Proxy for OMP (v0.4.0)
+# KSD Engineering Proxy for OMP (v0.5.0)
 
-**Status:** v0.4.0 TypeScript performance change stacked on v0.3.0 Adaptive + SDLC. CI verifies release metadata, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
+**Status:** v0.5.0 global/project/session mode inheritance stacked on v0.4.0 TypeScript performance changes. CI verifies release metadata, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
@@ -36,14 +36,43 @@ After a version is merged into main, refresh the marketplace and upgrade with `o
 
 The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-proxy@engineering-proxy`. This differs from the GitHub repository name.
 
-## Commands
+## Commands and scope precedence (v0.5.0)
 
-- `/engineering-proxy` or `/engineering-proxy status` — reports enabled status, effective mode and repo default, and whether the Ponytail command is registered. It does **not** infer Ponytail's actual mode.
-- `/engineering-proxy adaptive` — selects flat-by-default Clean Code review and risk-scaled SDLC policy in the current session.
-- `/engineering-proxy balanced` — returns to the conservative, repo-aware policy. OMP `appendEntry` saves mode in session history when supported; otherwise it only applies for the current runtime.
-- `/engineering-review [optional scope]` — sends an explicit scoped review request; if Ponytail is available the agent should use Ponytail review *once* and add only independent Engineering Proxy gates.
-- `/ponytail lite|full|ultra|off` — owned by Ponytail, unaffected by this plugin.
-- `/ponytail-review` — owned by Ponytail; never auto-launched by Engineering Proxy.
+All modes remain `balanced` or `adaptive`. The resolution order is **session override > project config > global config > built-in balanced**. The `enabled` setting merges independently (project overrides global; invalid JSON at either scope fails closed).
+
+| Command | Behavior |
+|---|---|
+| `/engineering-proxy` or `/engineering-proxy status` | Report effective mode, source, session override, global/project defaults and Ponytail command presence |
+| `/engineering-proxy adaptive` | Override the mode for the current session |
+| `/engineering-proxy balanced` | Override the mode for the current session |
+| `/engineering-proxy reset` | Reset the **session override** and inherit repo/global/built-in mode; saves a reset entry when OMP supports session persistence |
+| `/engineering-proxy global adaptive` | Set global default to adaptive for all repositories without a higher-priority override |
+| `/engineering-proxy global balanced` | Set global default to balanced |
+| `/engineering-proxy global reset` | Remove only global `enforcement` (preserves `enabled` and unrelated keys) |
+| `/engineering-proxy repo adaptive` | Set the current repository's default to adaptive |
+| `/engineering-proxy repo balanced` | Set the current repository's default to balanced |
+| `/engineering-proxy repo reset` | Remove only the repository's `enforcement` field |
+| `/engineering-review [scope]` | Explicit evidence-based engineering review; Ponytail remains optional |
+
+Global file (automatically created on first global write): `~/.omp/agent/engineering-proxy.json`.
+
+Project file: `<repo>/.engineering-proxy.json`, resolved from the nearest ancestor with `.git` or `.omp`. Config files support `enabled:boolean` and `enforcement:"balanced"|"adaptive"`. Existing unknown keys are preserved on writes. Config updates use an atomic temporary file and rename. **Do not place secrets in these files.**
+
+Example global default:
+
+```json
+{ "enabled": true, "enforcement": "adaptive" }
+```
+
+Repo override:
+
+```json
+{ "enforcement": "balanced" }
+```
+
+With these files, new sessions in this repo start balanced, all other repos inherit adaptive, and a session-specific `/engineering-proxy adaptive` temporarily takes priority. `/engineering-proxy reset` restores the balanced repo mode. Global/repo commands write their respective files, but do **not** silently remove an existing higher-priority session override.
+
+Ponytail commands (`/ponytail lite|full|ultra|off` and `/ponytail-review`) are still exclusively owned by Ponytail. Engineering Proxy does not mutate Ponytail state. Failed writes or invalid config files produce warnings instead of overwriting invalid contents.
 
 ## Put REVIEW and KSD below the editor
 
@@ -66,7 +95,7 @@ KSD's prompt policy now follows Requirements → Design → Implementation → V
 
 Adaptive mode emphasizes flat control flow, early returns and guarded exits without unsafe mechanical rewrites. Avoidable nesting in newly changed code is treated as FIX REQUIRED in **review guidance**, but the static ESLint rule remains an optional warning until the consuming repository explicitly enables a deterministic blocking gate. Neither mode automatically runs tests, marks an SDLC stage complete, rewrites code, or authorizes release.
 
-Session mode is stored in an OMP custom entry named `engineering-proxy-mode` when `pi.appendEntry` is supported. On session resume/switch the latest valid entry is replayed; otherwise KSD uses the project's configured default. KSD never overwrites Ponytail state.
+Session mode is stored in an OMP custom entry named `engineering-proxy-mode` when `pi.appendEntry` is supported. On session resume/switch the latest valid entry is replayed; a reset tombstone stops older session overrides, and otherwise KSD resolves project → global → built-in defaults. KSD never overwrites Ponytail state.
 
 ## TypeScript performance runtime (v0.4.0)
 
@@ -108,7 +137,7 @@ This is a **report validator**, not a CI provider connector: supplied evidence i
 
 ## Repo-adaptive style enforcement
 
-`before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["engineering-proxy"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.engineering-proxy.json` is optional (see `examples/`), supports `enabled:boolean` and `enforcement: "balanced"|"adaptive"`. The repository default is balanced when absent; explicit mode commands override it for the current session. Existing unrelated settings are untouched.
+`before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["engineering-proxy"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.engineering-proxy.json` is optional (see `examples/`), supports `enabled:boolean` and `enforcement: "balanced"|"adaptive"`. The repository default inherits the global config when absent (or balanced if both are absent); explicit session mode commands override both. Existing unrelated settings are untouched.
 
 **Important:** OMP policy injection is guidance, not a deterministic test. To enforce your preferences at commit/CI, opt into `plugins/engineering-proxy/eslint-rules/index.js` from your existing ESLint flat config. No ESLint config is overwritten. Rules:
 
