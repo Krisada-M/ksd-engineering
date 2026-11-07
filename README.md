@@ -42,7 +42,7 @@ The marketplace name is `engineering-proxy`, so the plugin ID is `engineering-pr
 
 ## Commands and scope precedence (v0.5.0)
 
-All modes remain `balanced` or `adaptive`. The resolution order is **session override > project config > global config > built-in balanced**. The `enabled` setting merges independently (project overrides global; invalid JSON at either scope fails closed).
+All modes remain `balanced` or `adaptive`. The resolution order is **session override > project config > global config > built-in balanced**. The `enabled` setting merges independently (project overrides global). An unparsable or invalid config at either scope **disables policy injection** (fail-open: OMP keeps working, but no KSD guidance is sent). The KSD status segment disappears, and the parse error is reported only by `/engineering-proxy status`; fix the file to restore injection.
 
 | Command | Behavior |
 |---|---|
