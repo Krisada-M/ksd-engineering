@@ -1,6 +1,9 @@
 // Optional ESLint flat-config rules. ESLint supplies the AST, so OMP needs no parser dependency.
 // Enable in each repository deliberately; this module is not auto-run by the OMP extension.
 
+// A return after a single statement may hug it (`const x = f();` then `return x;`); from two statements on it needs air.
+const MIN_PRECEDING_FOR_BLANK = 2;
+
 function getTextAndGap(context, previous, next) {
   const source = context.sourceCode ?? context.getSourceCode();
   const begin = previous.loc.end.line;
@@ -31,7 +34,7 @@ export const rules = {
   "blank-before-return": {
     meta: {
       type: "layout",
-      docs: { description: "Exactly one empty line before a non-first return in a block" },
+      docs: { description: "One empty line before a return preceded by two or more statements; never more than one" },
       schema: [],
       messages: { missing: "Leave exactly one blank line before this return.", extra: "Leave only one blank line before this return." },
     },
@@ -44,7 +47,12 @@ export const rules = {
           if (index <= 0) return;
           const { blankCount, containsOtherContent } = getTextAndGap(context, siblings[index - 1], node);
           if (containsOtherContent) return; // comments/preprocessor matter; avoid false positives
-          if (blankCount !== 1) context.report({ node, messageId: blankCount === 0 ? "missing" : "extra" });
+          if (blankCount > 1) {
+            context.report({ node, messageId: "extra" });
+
+            return;
+          }
+          if (blankCount === 0 && index >= MIN_PRECEDING_FOR_BLANK) context.report({ node, messageId: "missing" });
         },
       };
     },

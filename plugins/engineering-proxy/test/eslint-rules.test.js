@@ -84,6 +84,17 @@ test("first-statement guard return has no leading blank; later returns need exac
   assert.deepEqual(messagesOf(lint(clean)), []);
 });
 
+test("return after one statement may hug it; after two or more it needs exactly one blank", () => {
+  const returnRule = `${pluginName}/blank-before-return`;
+  const ofRule = code => lint(code).filter(m => m.ruleId === returnRule).map(m => m.messageId);
+
+  assert.deepEqual(ofRule("function a(x) {\n  const y = x + 1;\n  return y;\n}"), []);
+  assert.deepEqual(ofRule("function a(x) {\n  const y = x + 1;\n\n  return y;\n}"), []);
+  assert.deepEqual(ofRule("function a(x) {\n  const y = x + 1;\n\n\n  return y;\n}"), ["extra"]);
+  assert.deepEqual(ofRule("function a(x) {\n  const y = x + 1;\n  const z = y * 2;\n  return z;\n}"), ["missing"]);
+  assert.deepEqual(ofRule("function a(x) {\n  const y = x + 1;\n  const z = y * 2;\n\n  return z;\n}"), []);
+});
+
 test("exactly-one blank enforced: zero and two are both errors, comments block false positives", () => {
   const zero = "function a() {\n  return 1;\n}\nfunction b() {\n  return 1;\n}";
   const two = "function a() {\n  return 1;\n}\n\n\nfunction b() {\n  return 1;\n}";

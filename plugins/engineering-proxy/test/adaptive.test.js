@@ -76,7 +76,7 @@ test("adaptive command updates status and policy immediately, with no Ponytail m
   const event = { systemPromptOptions: { sections: { ponytail: "Ponytail preserved" } } };
   h.events.get("before_agent_start")(event, ctx);
   assert.match(event.systemPromptOptions.sections["engineering-proxy"], /flat by default/i);
-  assert.match(event.systemPromptOptions.sections["engineering-proxy"], /SDLC workflow/);
+  assert.doesNotMatch(event.systemPromptOptions.sections["engineering-proxy"], /SDLC workflow/, "SDLC moved to /engineering-review");
   assert.equal(event.systemPromptOptions.sections.ponytail, "Ponytail preserved");
 
   await h.commands.get("engineering-proxy").handler("balanced", ctx);

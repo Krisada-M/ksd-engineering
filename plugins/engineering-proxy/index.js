@@ -1,4 +1,5 @@
 import { loadConfig, setScopedMode, SUPPORTED_MODES } from "./config.js";
+import { buildSdlcPolicy } from "./sdlc.js";
 import { augmentSystemPrompt, buildPolicy, SECTION_KEY } from "./policy.js";
 import { KsdRuntime } from "./dist/runtime.js";
 
@@ -46,7 +47,7 @@ const REVIEW_INSTRUCTIONS = `Review the current requested change as Engineering 
 3. Checks: discover the repository's existing check commands first and inspect their safety; declare the applicable required and critical gates, then select typecheck/lint/tests/runtime/CI checks and execute only through permitted tools. Record exact cwd, exit code, output and pass/fail/skip counts. Missing or denied commands and credentials are NOT_RUN or BLOCKED. Never run migrations, database resets or real payments in shared environments.
 4. Evidence: a skipped test without required environment is NOT_RUN, not PASS. A CI YAML file is not proof its job exercised the change; inspect actual relevant job and step execution for the reviewed commit and distinguish dirty/untracked behavior it cannot cover. Source-only inspection cannot verify an executed gate. Optional installed ksd-check-changed and ksd-review-verdict validators may be invoked through approved OMP tools with supplied reports and required gates; they do not run checks or authenticate evidence. A tiny review needs no report file: report the observed evidence directly.
 5. Risk: escalate Auth, Payments, Database/schema/query changes, RLS/authorization, destructive data operations, secrets and concurrency based on behavior, not filenames. For auth check normal-user denial (cross-tenant, another owner's record, unauthenticated; service-role success is not isolation proof). For payments preserve confirmation, idempotency and replay protection. For databases check constraints, locks, transaction boundaries and migration compatibility. For deletions check scope, cascades and recovery.
-6. Style: independently verify the requested personal style (guard clauses, flat control flow, blank before non-first return, blank between functions), repo conventions and type safety. Review changed scope, not unrelated code.
+6. Style: independently verify the KSD style profile from the Engineering Proxy policy (guard clauses, no nested ternaries, result-vs-throw error split, strict types, why-only comments, blank-line rules), repo conventions and type safety. Review changed scope, not unrelated code.
 Report: acceptance criteria, affected contracts/risk, findings anchored to files with severity, exact observed check evidence (commands and results), and missing/denied/skipped/failed checks — then delivery and rollback implications. Never label release or merge readiness with unresolved required or security gates; no auto release/merge/push/deploy. Ponytail review must not be invoked here unless the user separately requested it; do not report a pass you did not observe.`;
 
 export function createExtension(pi, { globalConfigPath } = {}) {
@@ -213,7 +214,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         return;
       }
       const scope = typeof args === "string" && args.trim() ? `\nReview scope: ${args.trim()}` : "";
-      const message = REVIEW_INSTRUCTIONS + scope;
+      const message = `${REVIEW_INSTRUCTIONS}\n\n${buildSdlcPolicy({ mode: effectiveMode(config) })}${scope}`;
       // Explicit operator command only: no automatic Ponytail invocation.
       if (ctx.isIdle?.() === false) {
         pi.sendUserMessage(message, { deliverAs: "followUp" });
