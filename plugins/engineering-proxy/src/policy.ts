@@ -1,4 +1,4 @@
-import { buildSdlcPolicy, KSD_MODES, type KsdMode } from "./sdlc.js";
+import { KSD_MODES, type KsdMode } from "./sdlc.js";
 
 // Keep this policy orthogonal to Ponytail's simplicity and over-engineering guidance.
 export const SECTION_KEY = "engineering-proxy";
@@ -107,18 +107,24 @@ export function buildPolicy({ enforcement = "balanced" }: { enforcement?: KsdMod
   if (!KSD_MODES.includes(enforcement)) throw new Error("Unsupported KSD enforcement mode");
 
   const cleanCode = enforcement === "adaptive"
-    ? "Adaptive Clean Code: flat by default. Prefer guard clauses, early returns and simple linear flows; avoid unnecessary else-after-return, nested if and nested ternaries. Extract small helpers only if meaningful. Mark clearly avoidable nesting in newly changed code as FIX REQUIRED in reviews, but keep uncertain/behavior-sensitive cases as WARN. Never rewrite blindly or weaken security, transactions or error handling."
-    : "Balanced Clean Code: favor guard clauses and straightforward readable control flow where behavior is preserved; ambiguous nesting remains advisory.";
+    ? "Adaptive Clean Code: flat by default. Guard clauses and early returns; no else after return; no nested if when a guard clause or a combined condition works. Mark avoidable nesting in changed code as FIX REQUIRED in reviews; keep behavior-sensitive cases as WARN. Never weaken security, transactions or error handling to flatten code."
+    : "Balanced Clean Code: prefer guard clauses and early returns where behavior is preserved; nesting findings stay advisory.";
 
   return `${POLICY_MARKER}
-Repo-adaptive engineering preferences; do not override explicit user requirements or existing repo conventions.
+KSD personal code style. Explicit user requirements and existing repo conventions win over it.
 ${cleanCode}
-Place one blank line before a return when another statement precedes it in the same block; no leading blank after an opening brace for a first-statement return.
-Separate adjacent function implementations by one blank line. Do not insert blank lines into TypeScript overload groups or unrelated code.
-Preserve existing architecture, contracts, validation, security, accessibility and error handling. No unrelated renames/refactors.
-Enforcement=${enforcement}: authoritative project gates remain in control; KSD reviewer findings are advisory unless the repository adopts an explicit blocking rule. Report verified, unverified, and blockers distinctly.\n${buildSdlcPolicy({ mode: enforcement })}
-Ponytail integration: Ponytail owns YAGNI/simplification and /ponytail-review. Do not duplicate its instructions, mutate Ponytail mode, or auto-invoke its review. Minimum diff must still meet correctness and test requirements.
-Use repo formatter/linter/types/tests as evidence; do not claim PASS without executing relevant checks. Distinguish CI workflow presence from an actual successful relevant run, and never interpret a skipped DB-backed test as a pass. Never push, merge, deploy or modify production as part of style enforcement.\n${POLICY_END}`;
+- No nested ternaries: use if, a small named function, or a lookup map.
+- Blank line before a return only when two or more statements precede it in the same block; never before a first-statement return. One blank line between adjacent function implementations; leave TypeScript overload groups untouched.
+- Errors: domain logic returns a typed result (discriminated union); IO and infrastructure throw and are caught at the boundary (route handler, job runner, UI error boundary).
+- Types: no any, no \`as\` casts (\`as const\` is fine), no non-null \`!\`; narrow with type guards; exported functions declare return types.
+- Extract a helper only when it is reused or its name makes the caller clearer; length alone is not a reason.
+- Comments: one line explaining why; never restate the code.
+- Preserve existing architecture, contracts, validation and accessibility; no unrelated renames or refactors.
+- Ponytail owns YAGNI/simplification and /ponytail-review; do not duplicate or invoke it.
+- Risky behavior (auth/authorization, payments, DB schema/queries/RLS, destructive data operations, secrets, concurrency): prove normal-user denial (cross-tenant, another owner's record, unauthenticated), keep idempotency and replay protection, check constraints, locks, transaction boundaries and migration compatibility. Never run real payments or destructive shared-database checks.
+- Never claim a check passed without running it.
+Enforcement=${enforcement}: repo gates stay authoritative; these rules are deterministic only where the repo enables the KSD ESLint profile. The full SDLC checklist is delivered by /engineering-review.
+${POLICY_END}`;
 }
 
 /** Reconcile a string or array fallback prompt: remove owned guidance, or replace it with exactly one policy. */

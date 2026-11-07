@@ -1,6 +1,8 @@
-# KSD Engineering Proxy for OMP (v0.5.1)
+# KSD Engineering Proxy for OMP (v0.6.0)
 
-**Status:** v0.5.1 hardening on top of v0.5.0 global/project/session mode inheritance and v0.4.0 TypeScript performance changes. CI (Ubuntu and macOS) verifies release metadata, the repository's own style rules via ESLint, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests; interactive Mac/WSL OMP + Ponytail smoke is still NOT VERIFIED.
+**Status:** v0.6.0 personal style profile on top of v0.5.x global/project/session mode inheritance and v0.4.0 TypeScript performance changes. CI (Ubuntu and macOS) verifies release metadata, the repository's own style rules via ESLint, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests. Prompt injection was observed in a live OMP session on WSL; Mac and Ponytail mode-switching smoke is still NOT VERIFIED.
+
+**v0.6.0 changes:** the per-turn policy is now the KSD personal style profile (~430 tokens, down from ~950); the SDLC checklist moved to `/engineering-review`. **Behavior change:** `blank-before-return` no longer requires a blank line when only one statement precedes the return. `examples/eslint.config.mjs` ships the full profile as blocking errors.
 
 **v0.5.1 changes:** hermetic tests (isolated `HOME`); `check-changed` no longer reports a false `NOT_RUN` when paths differ only by symlinks (macOS `/var` vs `/private/var`); the global `~/.omp` directory is no longer treated as a project root; the repository now passes its own ESLint rules in CI. **Breaking (undocumented API):** the named export `syncStatus` was removed from `index.js`; use `KsdRuntime#syncStatus` from `dist/runtime.js`. OMP loads only the default export, so installed plugins are unaffected.
 
@@ -93,7 +95,12 @@ Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears t
 
 ## SDLC workflow (both modes)
 
-KSD's prompt policy now follows Requirements → Design → Implementation → Verification → Delivery. The checks are **risk-scaled**, not a rigid documentation ceremony: trivial style changes can use a short scope and focused checks, while security-sensitive authentication, payments, data migrations and concurrency require stronger contract and test evidence.
+The policy is split in two tiers so the per-turn prompt stays small:
+
+- **Every turn** (system prompt, ~430 tokens): the KSD personal style profile (guard clauses, no nested ternaries, result-vs-throw error split, strict types, helper extraction, why-only comments, blank-line rules), the risky-behavior escalation checks, and "never claim an unexecuted check passed".
+- **`/engineering-review` only**: the full Requirements → Design → Implementation → Verification → Delivery SDLC checklist, appended to the review instructions in the effective mode.
+
+The checks are **risk-scaled**, not a rigid documentation ceremony: trivial style changes can use a short scope and focused checks, while security-sensitive authentication, payments, data migrations and concurrency require stronger contract and test evidence.
 
 Adaptive mode emphasizes flat control flow, early returns and guarded exits without unsafe mechanical rewrites. Avoidable nesting in newly changed code is treated as FIX REQUIRED in **review guidance**, but the static ESLint rule remains an optional warning until the consuming repository explicitly enables a deterministic blocking gate. Neither mode automatically runs tests, marks an SDLC stage complete, rewrites code, or authorizes release.
 
@@ -151,9 +158,11 @@ Fallback string and array prompts are reconciled when enabled or disabled. An un
 
 **Important:** OMP policy injection is guidance, not a deterministic test. To enforce your preferences at commit/CI, opt into `plugins/engineering-proxy/eslint-rules/index.js` from your existing ESLint flat config. No ESLint config is overwritten. Rules:
 
-- `blank-before-return`: error. Exactly one blank before return only when it follows a previous statement in the same block; no blank before first-statement guard returns.
+- `blank-before-return`: error. Exactly one blank before a return preceded by two or more statements in the same block; after a single statement the blank is optional; never more than one; no blank before first-statement guard returns.
 - `blank-between-functions`: error. Exactly one blank between adjacent function implementations, including arrow functions assigned to const/let. Does not act on TS overload signatures.
-- `prefer-guard-clauses`: warning only, no semantic autofix.
+- `prefer-guard-clauses`: warning in this repository's dogfood config, error in the KSD profile; never a semantic autofix.
+
+`examples/eslint.config.mjs` is the full **KSD style profile** as blocking errors for lint-staged: the three rules above plus `no-else-return`, `no-nested-ternary`, `max-depth: 3`, and for TypeScript `no-explicit-any`, `no-non-null-assertion`, `consistent-type-assertions: never` (`as const` stays allowed) and `explicit-module-boundary-types`. Error handling (typed results in domain logic, throw at IO boundaries), helper extraction and why-only comments cannot be linted; they live in the prompt policy. On an existing codebase, gate only changed lines with `check-changed` rather than the whole tree.
 
 No automatic formatting or rewrites. The ESLint rules are not automatically enabled by installing the OMP plugin. Avoid adding a second linter if the repository has an authoritative existing formatting convention; align with it first.
 

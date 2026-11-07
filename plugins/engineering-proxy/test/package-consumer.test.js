@@ -170,7 +170,8 @@ export default [
     "      return value;",
     "    }",
     "  }",
-    "  return null;",
+    "  const fallback = null;",
+    "  return fallback;",
     "}",
     "function second() {",
     "  return 1;",
@@ -178,7 +179,8 @@ export default [
   ].join("\n");
   const badTs = [
     "export function first(value: number): number {",
-    "  const result = value + 1;",
+    "  const next = value + 1;",
+    "  const result = next * 2;",
     "  return result;",
     "}",
     "export function second(): number {",
