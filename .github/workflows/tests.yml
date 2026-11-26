@@ -93,3 +93,32 @@ jobs:
         run: node plugins/erosiano-dev/test/eval/smoke-omp.mjs --omp "$OMP_SMOKE_BINARY"
       - name: Real OMP prompt injection with loopback fixture
         run: node plugins/erosiano-dev/test/eval/smoke-omp-prompt.mjs --omp "$OMP_SMOKE_BINARY"
+      - name: Checkout pinned v0.6.0 legacy marketplace
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: 73fc916c694946fd79a7cf71e04c35bbec42cb27
+          path: _host-fixtures/legacy
+          persist-credentials: false
+          sparse-checkout: |
+            .omp-plugin
+            plugins/engineering-proxy
+      - name: Checkout pinned Ponytail
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: DietrichGebert/ponytail
+          ref: ebd8654c2c627f721eb8f9c0d1bd4090a29f9e10
+          path: _host-fixtures/ponytail
+          persist-credentials: false
+          sparse-checkout: |
+            pi-extension
+            hooks
+            skills/ponytail
+      - name: Real OMP marketplace migration and Ponytail coexistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C _host-fixtures/legacy rev-parse HEAD)" = 73fc916c694946fd79a7cf71e04c35bbec42cb27
+          test "$(git -C _host-fixtures/ponytail rev-parse HEAD)" = ebd8654c2c627f721eb8f9c0d1bd4090a29f9e10
+          node plugins/erosiano-dev/test/eval/smoke-omp-adoption.mjs --omp "$OMP_SMOKE_BINARY" \
+            --legacy "$GITHUB_WORKSPACE/_host-fixtures/legacy" \
+            --ponytail "$GITHUB_WORKSPACE/_host-fixtures/ponytail/pi-extension/index.js"
