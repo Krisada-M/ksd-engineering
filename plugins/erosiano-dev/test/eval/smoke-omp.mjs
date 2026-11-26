@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const extension = fileURLToPath(new URL("../../index.js", import.meta.url));
 const COMMANDS = ["erosiano-dev", "engineering-proxy", "engineering-review"];
 const TIMEOUT = 30000;
+const MODEL = "erosiano-smoke/fixture";
 
 export function verifyCommandCatalog(data) {
   assert.ok(Array.isArray(data?.commands), "OMP command catalog unavailable");
@@ -25,7 +26,9 @@ export function verifyLocalCompletion(frame) {
   assert.equal(frame.agentInvoked, false, "Command unexpectedly invoked the agent");
 }
 
-function createRpc(binary, project, home, flags) {
+// Only the explicit synthetic-prompt test may enable model turns; its endpoint must be loopback.
+export function createRpc(binary, project, home, flags, fixtureEndpoint) {
+  if (fixtureEndpoint !== undefined && !/^http:\/\/127\.0\.0\.1:[0-9]{1,5}\/v1$/.test(fixtureEndpoint)) throw new Error("Fixture model must use loopback");
   // Only pass a minimal environment, never reuse auth/config from the operator's HOME.
   const env = {
     PATH: process.env.PATH ?? "/usr/bin:/bin",
@@ -38,7 +41,17 @@ function createRpc(binary, project, home, flags) {
     ...flags,
   };
   mkdirSync(env.TMPDIR, { recursive: true });
-  const child = spawn(binary, ["--mode", "rpc", "--no-ui", "--no-session", "--no-extensions", "--no-skills", "--no-rules", "--no-context-files", "--extension", extension],
+  mkdirSync(env.PI_CODING_AGENT_DIR, { recursive: true });
+  // Noninteractive OMP requires an available model even for local commands. Use a
+  // dedicated loopback-only fixture with a dummy key; no real provider credential.
+  writeFileSync(join(env.PI_CODING_AGENT_DIR, "models.yml"), JSON.stringify({
+    providers: { "erosiano-smoke": {
+      baseUrl: fixtureEndpoint ?? "http://127.0.0.1:1/v1", apiKey: "fixture-not-a-secret", api: "openai-completions",
+      models: [{ id: "fixture", name: "Command smoke fixture", reasoning: false, input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 }],
+    } },
+  }));
+  const child = spawn(binary, ["--mode", "rpc", "--no-ui", "--no-session", "--no-extensions", "--no-skills", "--no-rules", "--no-context-files", "--model", MODEL, "--extension", extension],
     { cwd: project, env, stdio: ["pipe", "pipe", "pipe"], shell: false });
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   const buffered = [];
@@ -57,8 +70,8 @@ function createRpc(binary, project, home, flags) {
     try {
       if (line.length > 2 * 1024 * 1024) throw new Error("RPC frame exceeds smoke limit");
       const frame = JSON.parse(line);
-      if (frame.type === "agent_start") throw new Error("Unexpected model/agent turn");
-      if (frame.type === "prompt_result" && frame.agentInvoked === true) throw new Error("Unexpected model/agent invocation");
+      if (!fixtureEndpoint && frame.type === "agent_start") throw new Error("Unexpected model/agent turn");
+      if (!fixtureEndpoint && frame.type === "prompt_result" && frame.agentInvoked === true) throw new Error("Unexpected model/agent invocation");
       const waiter = [...pending].find(item => item.match(frame));
       if (waiter) {
         pending.delete(waiter);
@@ -102,13 +115,20 @@ function createRpc(binary, project, home, flags) {
     });
   }
 
-  async function request(type, data = {}) {
+  async function request(type, data = {}, { invokeAgent = false } = {}) {
+    if (invokeAgent && (!fixtureEndpoint || type !== "prompt")) throw new Error("Agent invocation only allowed for a loopback fixture prompt");
     const id = "smoke-" + ++counter;
     const response = wait(frame => frame.id === id && frame.type === "response");
     child.stdin.write(JSON.stringify({ id, type, ...data }) + "\n");
     const frame = await response;
     assert.equal(frame.success, true, "OMP rejected RPC command " + type);
-    if (type === "prompt" && frame.data?.agentInvoked !== false) {
+    if (invokeAgent) {
+      assert.notEqual(frame.data?.agentInvoked, false, "Synthetic prompt completed without a model turn");
+      const completed = await wait(item => item.id === id && item.type === "prompt_result");
+      assert.equal(completed.status, "completed", "Synthetic model turn did not complete");
+      assert.equal(completed.agentInvoked, true);
+      assert.equal(completed.sessionSettled, true, "Synthetic turn did not settle");
+    } else if (type === "prompt" && frame.data?.agentInvoked !== false) {
       verifyLocalCompletion(await wait(item => item.id === id && item.type === "prompt_result"));
     }
 
@@ -136,6 +156,9 @@ async function exercise(binary, home, project, disable) {
   const rpc = createRpc(binary, project, home, flags);
   try {
     await rpc.wait(frame => frame.type === "ready");
+    const state = await rpc.request("get_state");
+    assert.equal(state.model?.provider, "erosiano-smoke", "OMP did not select the fixture provider");
+    assert.equal(state.model?.id, "fixture", "OMP did not select the fixture model");
     verifyCommandCatalog(await rpc.request("get_available_commands"));
     await rpc.request("prompt", { message: "/erosiano-dev status" });
     await rpc.request("prompt", { message: "/erosiano-dev adaptive" });
@@ -159,7 +182,13 @@ async function exercise(binary, home, project, disable) {
     assert.equal(migrated.preserved, "legacy-value");
     assert.equal(JSON.parse(readFileSync(join(project, ".engineering-proxy.json"), "utf8")).enforcement, "balanced");
   } finally {
-    await rpc.close();
+    try {
+      await rpc.close();
+    } catch (error) {
+      // This process has an isolated HOME and dummy model credential, not user secrets.
+      const diagnostic = rpc.diagnostics().trim();
+      throw new Error(error.message + (diagnostic ? "\nOMP stderr (bounded): " + diagnostic : ""), { cause: error });
+    }
   }
 }
 
