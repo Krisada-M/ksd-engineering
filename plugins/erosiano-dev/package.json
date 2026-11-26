@@ -13,7 +13,8 @@
   "bin": {
     "ksd-check-changed": "./check-changed.js",
     "ksd-review-verdict": "./review-verdict.js",
-    "erosiano-practices": "./practices.js"
+    "erosiano-practices": "./practices.js",
+    "erosiano-baseline": "./baseline.js"
   },
   "engines": {
     "node": ">=20"

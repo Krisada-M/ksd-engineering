@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,12 +11,23 @@ function isRecord(value) {
 }
 
 function readJson(path, limit) {
-  const info = statSync(path);
-  if (!info.isFile() || info.size > limit) throw new Error("Expected a bounded JSON file");
-  const data = readFileSync(path);
-  if (data.length > limit) throw new Error("JSON input exceeds size limit");
+  const fd = openSync(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size > limit) throw new Error("Expected a bounded JSON file");
+    const data = Buffer.alloc(limit + 1);
+    let length = 0;
+    while (length < data.length) {
+      const size = readSync(fd, data, length, data.length - length, null);
+      if (!size) break;
+      length += size;
+    }
+    if (length > limit) throw new Error("JSON input exceeds size limit");
 
-  return JSON.parse(data.toString("utf8"));
+    return JSON.parse(data.subarray(0, length).toString("utf8"));
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export function readPracticeCatalog() {
@@ -66,7 +77,8 @@ function validateContext(input, catalog) {
   }
 
   const gates = input.enabledGates ?? [];
-  if (!Array.isArray(gates) || gates.some(id => !ids.has(id))) throw new Error("enabledGates must contain known practice IDs");
+  const optionalGates = new Set(catalog.practices.filter(rule => rule.mechanisms.includes("optional-native-gate")).map(rule => rule.id));
+  if (!Array.isArray(gates) || gates.some(id => !optionalGates.has(id))) throw new Error("enabledGates must contain known optional-native-gate practice IDs");
   if (input.mode !== undefined && !["balanced", "adaptive"].includes(input.mode)) throw new Error("Unsupported enforcement mode");
 
   return { overrides, gates: new Set(gates) };
@@ -127,7 +139,17 @@ function main(args) {
   console.log(JSON.stringify(result, null, 2));
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+function isMainModule() {
+  try {
+    if (!process.argv[1]) return false;
+
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

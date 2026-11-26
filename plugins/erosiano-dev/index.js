@@ -3,6 +3,7 @@ import { buildSdlcPolicy } from "./sdlc.js";
 import { augmentSystemPrompt, buildPolicy, SECTION_KEY } from "./policy.js";
 import { KsdRuntime } from "./dist/runtime.js";
 import { fileURLToPath } from "node:url";
+import { ScopedBaselineCache, summarizeBaselineEvidence } from "./baseline.js";
 
 const MODE_ENTRY = "erosiano-dev-mode";
 const LEGACY_MODE_ENTRY = "engineering-proxy-mode";
@@ -91,6 +92,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
   // One runtime per extension instance: caches must not leak between hosts or tests.
   const runtime = new KsdRuntime(cwd => loadConfig(cwd, { globalConfigPath }), buildPolicy, isDisabledByEnv);
 
+  const baselines = new ScopedBaselineCache();
   let isActive = false;
   let selectedSessionMode = null;
   let lastWarning = null;
@@ -129,6 +131,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
   }
 
   function restoreSession(ctx) {
+    baselines.clear();
     isActive = false;
     const config = refreshConfig(ctx);
     runtime.invalidateStatus(ctx?.ui);
@@ -219,7 +222,15 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         }
 
         const scope = parsed.scope ? `\nBaseline scope: ${parsed.scope}` : "\nBaseline scope: current working directory.";
-        const message = `Establish a read-only code baseline for the requested scope. Do not implement changes or execute project checks in this baseline-only request.\n\n${BASELINE_GUIDANCE}${scope}`;
+        let snapshot = "Local bounded evidence unavailable; discover scope through approved tools.";
+        try {
+          // Explicit operator request only. A sample is never treated as a complete baseline.
+          const record = baselines.capture({ root: config.root, scope: parsed.scope || ctx.cwd || "." });
+          snapshot = summarizeBaselineEvidence(record);
+        } catch {
+          // A symbolic scope or unavailable filesystem is normal for an agent-guided request.
+        }
+        const message = `Establish a read-only code baseline for the requested scope. Do not implement changes or execute project checks in this baseline-only request.\n\n${BASELINE_GUIDANCE}\nLocal sample (not a verified project baseline): ${snapshot}${scope}`;
         requestAgent(pi, ctx, message);
 
         return;
