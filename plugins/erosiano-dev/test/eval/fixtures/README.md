@@ -1,9 +1,9 @@
-# Eval fixtures — six-case Agent pilot
+# Eval fixtures — eight-case Agent pilot
 
-Eval data for the KSD engineering-proxy six-task pilot. These are NOT production tests:
+Eval data for the KSD engineering-proxy eight-task pilot. These are NOT production tests:
 
 - never imported by plugin code
-- never run by `npm test`
+- never used as agent trials by `npm test`; a fixture integrity test now runs five trusted broken-input checks and expects assertion failures
 - no orchestration framework, no provider calls, no npm install anywhere
 - no network beyond the loopback-only server in `ui-small/`
 - pure Node built-ins; POSIX assumed (realpath, no UNC)
@@ -30,3 +30,5 @@ Run recipes the pilot harness uses (not the Agent's):
 - `ci-and-failure`: copy the directory to an isolated temp repo, run `./setup.sh` (refuses to run inside an existing git work tree), record the printed baseline sha, then `sh checks/run-tests.sh` (fails deliberately). `ci-record.json` names a stale head_sha that never matches the fixture-shaped repo.
 
 Fixture sizes are small: each directory is a handful of files, runnable in isolation with no dependencies, so the pilot's temp copies stay cheap.
+
+The new async-rejection and atomic-stock fixtures intentionally violate the stated IO and concurrency contracts. See [validation protocol](../../../../../docs/EROSIANO_DEV_VALIDATION.md) for independent study setup and supplied-results scoring. Never execute arbitrary agent output as part of trusted fixture integrity checks.
