@@ -5,19 +5,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { validateRelease } from "../../../validate-release.js";
 
-function fixture({ metadata = "0.2.0", plugin = "0.2.0", packageVersion = "0.2.0", source = "./plugins/engineering-proxy" } = {}) {
+function fixture({ metadata = "0.2.0", plugin = "0.2.0", packageVersion = "0.2.0", source = "./plugins/erosiano-dev" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "ksd-release-"));
   mkdirSync(join(root, ".omp-plugin"));
-  mkdirSync(join(root, "plugins/engineering-proxy"), { recursive: true });
+  mkdirSync(join(root, "plugins/erosiano-dev"), { recursive: true });
   writeFileSync(join(root, ".omp-plugin/marketplace.json"), JSON.stringify({
     metadata: { version: metadata },
-    plugins: [{ name: "engineering-proxy", source, version: plugin }],
+    plugins: [{ name: "erosiano-dev", source, version: plugin }],
   }));
-  writeFileSync(join(root, "plugins/engineering-proxy/package.json"), JSON.stringify({
+  writeFileSync(join(root, "plugins/erosiano-dev/package.json"), JSON.stringify({
     version: packageVersion,
     omp: { extensions: ["./index.js"] },
   }));
-  writeFileSync(join(root, "plugins/engineering-proxy/index.js"), "export default () => {};");
+  writeFileSync(join(root, "plugins/erosiano-dev/index.js"), "export default () => {};");
 
   return root;
 }
@@ -27,7 +27,7 @@ test("marketplace and package versions match an existing OMP entrypoint", () => 
   try {
     assert.deepEqual(validateRelease(dir), {
       version: "0.2.0",
-      source: "./plugins/engineering-proxy",
+      source: "./plugins/erosiano-dev",
       extension: "./index.js",
     });
   } finally { rmSync(dir, { force: true, recursive: true }); }
@@ -43,7 +43,7 @@ test("version mismatches fail before publishing", () => {
 test("missing OMP entrypoint fails closed", () => {
   const dir = fixture();
   try {
-    writeFileSync(join(dir, "plugins/engineering-proxy/package.json"), JSON.stringify({
+    writeFileSync(join(dir, "plugins/erosiano-dev/package.json"), JSON.stringify({
       version: "0.2.0", omp: { extensions: ["./missing.js"] },
     }));
     assert.throws(() => validateRelease(dir), /Invalid or missing/);

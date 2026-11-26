@@ -1,18 +1,18 @@
 {
-  "name": "engineering-proxy",
+  "name": "erosiano-dev",
   "owner": {
     "name": "Krisada-M"
   },
   "metadata": {
     "description": "Repo-adaptive engineering policy for OMP, designed to coexist with Ponytail",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "plugins": [
     {
-      "name": "engineering-proxy",
+      "name": "erosiano-dev",
       "description": "Balanced engineering policy and quality-gate workflow, Ponytail compatible",
-      "source": "./plugins/engineering-proxy",
-      "version": "0.6.0"
+      "source": "./plugins/erosiano-dev",
+      "version": "0.7.0"
     }
   ]
 }

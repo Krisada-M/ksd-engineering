@@ -55,10 +55,10 @@ test("mode parser accepts status, balanced and adaptive, rejects extras", () => 
 });
 
 test("repo config accepts adaptive, rejects unsupported and malformed values", () => temp(dir => {
-  writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enforcement: "adaptive" }));
+  writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enforcement: "adaptive" }));
   assert.equal(loadConfig(dir).enforcement, "adaptive");
 
-  writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enforcement: "ultra" }));
+  writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enforcement: "ultra" }));
   assert.equal(loadConfig(dir).enabled, false);
   assert.match(loadConfig(dir).configError, /Invalid/);
 }));
@@ -67,40 +67,40 @@ test("adaptive command updates status and policy immediately, with no Ponytail m
   const h = rig();
   const ctx = h.ctx(dir);
   h.events.get("session_start")({}, ctx);
-  await h.commands.get("engineering-proxy").handler("adaptive", ctx);
+  await h.commands.get("erosiano-dev").handler("adaptive", ctx);
 
-  assert.equal(h.entries.at(-1).customType, "engineering-proxy-mode");
+  assert.equal(h.entries.at(-1).customType, "erosiano-dev-mode");
   assert.equal(h.entries.at(-1).data.mode, "adaptive");
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
 
   const event = { systemPromptOptions: { sections: { ponytail: "Ponytail preserved" } } };
   h.events.get("before_agent_start")(event, ctx);
-  assert.match(event.systemPromptOptions.sections["engineering-proxy"], /flat by default/i);
-  assert.doesNotMatch(event.systemPromptOptions.sections["engineering-proxy"], /SDLC workflow/, "SDLC moved to /engineering-review");
+  assert.match(event.systemPromptOptions.sections["erosiano-dev"], /flat by default/i);
+  assert.doesNotMatch(event.systemPromptOptions.sections["erosiano-dev"], /SDLC workflow/, "SDLC moved to /engineering-review");
   assert.equal(event.systemPromptOptions.sections.ponytail, "Ponytail preserved");
 
-  await h.commands.get("engineering-proxy").handler("balanced", ctx);
+  await h.commands.get("erosiano-dev").handler("balanced", ctx);
   h.events.get("before_agent_start")(event, ctx);
-  assert.match(event.systemPromptOptions.sections["engineering-proxy"], /Balanced Clean Code/);
-  assert.doesNotMatch(event.systemPromptOptions.sections["engineering-proxy"], /Adaptive Clean Code/);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.match(event.systemPromptOptions.sections["erosiano-dev"], /Balanced Clean Code/);
+  assert.doesNotMatch(event.systemPromptOptions.sections["erosiano-dev"], /Adaptive Clean Code/);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
 }));
 
 test("mode restores on session resume and falls back to repo default", async () => temp(async dir => {
-  writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enforcement: "adaptive" }));
+  writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enforcement: "adaptive" }));
   const h = rig();
   const ctx = h.ctx(dir);
   h.events.get("session_start")({}, ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
 
-  await h.commands.get("engineering-proxy").handler("balanced", ctx);
+  await h.commands.get("erosiano-dev").handler("balanced", ctx);
   h.events.get("session_switch")({}, ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
   assert.deepEqual(resolveSessionMode(h.entries, "adaptive"), "balanced");
 
   h.entries.length = 0;
   h.events.get("session_tree")({}, ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
 }));
 
 test("branch history is authoritative: only the active branch applies, faults never fall through", async () => temp(dir => {
@@ -114,30 +114,30 @@ test("branch history is authoritative: only the active branch applies, faults ne
   }
 
   h.events.get("session_start")({}, session([{ type: "custom", customType: "engineering-proxy-mode", data: { mode: "adaptive" } }]).ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
 
   // Branch B: balanced; entries visible only through getEntries must NOT rescue a nullish branch result.
   const b = h.ctx(dir);
   b.sessionManager = { getBranch: () => [], getEntries: () => [{ type: "custom", customType: "engineering-proxy-mode", data: { mode: "adaptive" } }] };
   h.events.get("session_switch")({}, b);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"], "getEntries is ignored while getBranch exists and yields no override");
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"], "getEntries is ignored while getBranch exists and yields no override");
 
   // Branch C: reset tombstone inherits repo/global (default balanced here).
   h.events.get("session_switch")({}, session([{ type: "custom", customType: "engineering-proxy-mode", data: { reset: true } }]).ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
 
   // Malformed/nullish branch data: no override, never a crash and never all-branches fallback.
   h.events.get("session_switch")({}, session("not-an-array").ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
   const throwing = h.ctx(dir);
   throwing.sessionManager = { getBranch() { throw new Error("branch unavailable"); } };
   h.events.get("session_branch")({}, throwing);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
 }));
 
 test("two repositories with separate instances keep independent config and session state", async () => temp(async dirA => temp(async dirB => {
-  writeFileSync(join(dirA, ".engineering-proxy.json"), JSON.stringify({ enforcement: "balanced" }));
-  writeFileSync(join(dirB, ".engineering-proxy.json"), JSON.stringify({ enforcement: "adaptive" }));
+  writeFileSync(join(dirA, ".erosiano-dev.json"), JSON.stringify({ enforcement: "balanced" }));
+  writeFileSync(join(dirB, ".erosiano-dev.json"), JSON.stringify({ enforcement: "adaptive" }));
 
   const mk = dir => {
     const events = new Map();
@@ -162,17 +162,17 @@ test("two repositories with separate instances keep independent config and sessi
   const instanceA = mk(dirA);
   const instanceB = mk(dirB);
 
-  await instanceA.commands.get("engineering-proxy").handler("adaptive", instanceA.ctx());
-  assert.deepEqual(instanceA.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  await instanceA.commands.get("erosiano-dev").handler("adaptive", instanceA.ctx());
+  assert.deepEqual(instanceA.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
   instanceB.events.get("session_start")({}, instanceB.ctx());
-  assert.deepEqual(instanceB.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"], "repo B's default is independent of instance A's session");
+  assert.deepEqual(instanceB.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"], "repo B's default is independent of instance A's session");
 
   // Live config change to repo B becomes visible at B's next lifecycle boundary; A is unaffected.
-  writeFileSync(join(dirB, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+  writeFileSync(join(dirB, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
   instanceB.events.get("session_start")({}, instanceB.ctx());
-  assert.deepEqual(instanceB.statuses.at(-1), ["engineering-proxy", undefined]);
+  assert.deepEqual(instanceB.statuses.at(-1), ["erosiano-dev", undefined]);
   instanceA.events.get("session_start")({}, instanceA.ctx());
-  assert.deepEqual(instanceA.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"], "A replays only its own session override");
+  assert.deepEqual(instanceA.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"], "A replays only its own session override");
 
   assert.notDeepEqual(instanceA.entries, instanceB.entries, "session entry lists are per instance");
 })));
@@ -190,17 +190,17 @@ test("invalid args and disabled plugin cannot mutate current mode", async () => 
   const h = rig();
   const ctx = h.ctx(dir);
   h.events.get("session_start")({}, ctx);
-  await h.commands.get("engineering-proxy").handler("full", ctx);
+  await h.commands.get("erosiano-dev").handler("full", ctx);
   assert.equal(h.entries.length, 0);
   assert.match(h.notices.at(-1)[0], /Usage:/);
 
   // A rejected command must not leave stale status behind: refresh+status run before validation.
-  writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
-  await h.commands.get("engineering-proxy").handler("ultra", ctx);
+  writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
+  await h.commands.get("erosiano-dev").handler("ultra", ctx);
   assert.equal(h.entries.length, 0);
   assert.equal(h.statuses.at(-1)[1], undefined, "refresh before validation clears status even on invalid input");
 
-  await h.commands.get("engineering-proxy").handler("adaptive", ctx);
+  await h.commands.get("erosiano-dev").handler("adaptive", ctx);
   assert.equal(h.entries.length, 0);
   assert.match(h.notices.at(-1)[0], /disabled/);
   assert.equal(h.statuses.at(-1)[1], undefined, "status clears immediately on disabled rejection");
@@ -212,25 +212,25 @@ test("environment disable clears status and a rejected session command appends n
   const h = rig();
   const ctx = h.ctx(dir);
   h.events.get("session_start")({}, ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
   const ponytailEvent = { systemPromptOptions: { sections: { ponytail: "Ponytail preserved" } } };
   h.events.get("before_agent_start")(ponytailEvent, ctx);
-  assert.match(ponytailEvent.systemPromptOptions.sections["engineering-proxy"], /Balanced Clean Code/);
+  assert.match(ponytailEvent.systemPromptOptions.sections["erosiano-dev"], /Balanced Clean Code/);
 
-  const previous = process.env.ENGINEERING_PROXY_DISABLED;
-  process.env.ENGINEERING_PROXY_DISABLED = "1";
+  const previous = process.env.EROSIANO_DEV_DISABLED;
+  process.env.EROSIANO_DEV_DISABLED = "1";
   try {
-    await h.commands.get("engineering-proxy").handler("adaptive", ctx);
+    await h.commands.get("erosiano-dev").handler("adaptive", ctx);
     assert.equal(h.entries.length, 0, "no session entry appended by rejected command");
     assert.match(h.notices.at(-1)[0], /disabled/);
     assert.equal(h.statuses.at(-1)[1], undefined, "environment disable clears status");
 
     h.events.get("before_agent_start")(ponytailEvent, ctx);
-    assert.equal(ponytailEvent.systemPromptOptions.sections["engineering-proxy"], undefined, "owned section removed when disabled");
+    assert.equal(ponytailEvent.systemPromptOptions.sections["erosiano-dev"], undefined, "owned section removed when disabled");
     assert.equal(ponytailEvent.systemPromptOptions.sections.ponytail, "Ponytail preserved");
   } finally {
-    if (previous === undefined) delete process.env.ENGINEERING_PROXY_DISABLED;
-    else process.env.ENGINEERING_PROXY_DISABLED = previous;
+    if (previous === undefined) delete process.env.EROSIANO_DEV_DISABLED;
+    else process.env.EROSIANO_DEV_DISABLED = previous;
   }
 }));
 
@@ -238,8 +238,8 @@ test("mode remains usable when OMP session persistence API is absent", async () 
   const h = rig();
   delete h.pi.appendEntry;
   const ctx = h.ctx(dir);
-  await h.commands.get("engineering-proxy").handler("adaptive", ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  await h.commands.get("erosiano-dev").handler("adaptive", ctx);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
   assert.match(h.notices.at(-1)[0], /runtime only/);
 }));
 
@@ -297,7 +297,7 @@ test("structured section is preferred and stale owned fallback blocks transition
   const result = augmentSystemPrompt(event, policy, () => {});
 
   assert.equal(result.systemPrompt, "Unrelated\n\n\n\nPonytail instructions");
-  assert.equal(event.systemPromptOptions.sections["engineering-proxy"], policy);
+  assert.equal(event.systemPromptOptions.sections["erosiano-dev"], policy);
   assert.equal(result.systemPrompt.split(POLICY_MARKER).length - 1, 0, "policy lives in the section, not duplicated in the fallback");
   assert.equal(event.systemPrompt.includes(stale), true, "event field itself is untouched; host applies the returned value");
 });
@@ -351,7 +351,7 @@ test("legacy warning is notified once, visible in status, and clears after recon
   assert.match(h.statuses.at(-1)[1], /unterminated legacy policy/);
   const event = { systemPromptOptions: { sections: {} } };
   h.events.get("before_agent_start")(event, ctx);
-  assert.equal(event.systemPromptOptions.sections["engineering-proxy"], buildPolicy());
+  assert.equal(event.systemPromptOptions.sections["erosiano-dev"], buildPolicy());
   assert.doesNotMatch(h.statuses.at(-1)[1], /unterminated legacy policy/);
 }));
 
@@ -362,7 +362,7 @@ test("unterminated fallback prevents inserting a second policy into sections", (
     systemPromptOptions: { sections: { ponytail: "untouched" } },
   };
   assert.equal(augmentSystemPrompt(event, buildPolicy(), message => warnings.push(message)), undefined);
-  assert.equal(event.systemPromptOptions.sections["engineering-proxy"], undefined);
+  assert.equal(event.systemPromptOptions.sections["erosiano-dev"], undefined);
   assert.equal(event.systemPromptOptions.sections.ponytail, "untouched");
   assert.equal(warnings.length, 1);
 });
@@ -370,7 +370,29 @@ test("unterminated fallback prevents inserting a second policy into sections", (
 test("disabled status retains unresolved legacy warning", () => temp(dir => {
   const h = rig();
   const ctx = h.ctx(dir);
-  writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+  writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
   h.events.get("before_agent_start")({ systemPrompt: "[Engineering Proxy Policy v0.1]\nunknown tail" }, ctx);
   assert.match(h.statuses.at(-1)[1], /unterminated legacy policy/);
 }));
+
+test("mixed session entry generations preserve chronological reset semantics", () => {
+  const old = { type: "custom", customType: "engineering-proxy-mode", data: { mode: "adaptive" } };
+  const reset = { type: "custom", customType: "erosiano-dev-mode", data: { reset: true } };
+  const latest = { type: "custom", customType: "erosiano-dev-mode", data: { mode: "adaptive" } };
+  assert.equal(resolveSessionMode([old, reset], "balanced"), "balanced");
+  assert.equal(resolveSessionMode([reset, old], "balanced"), "adaptive");
+  assert.equal(resolveSessionMode([old, reset, latest], "balanced"), "adaptive");
+});
+
+test("complete old and current policy blocks reconcile without touching unrelated content", () => {
+  const legacy = "[Engineering Proxy Policy]\\nold body\\n[End Engineering Proxy Policy]".replaceAll("\\n", "\n");
+  const current = buildPolicy();
+  const event = { systemPrompt: ["prefix", legacy, current, "suffix"].join("\n"), systemPromptOptions: { sections: { "engineering-proxy": "old", ponytail: "untouched" } } };
+  const result = augmentSystemPrompt(event, current);
+  assert.equal(result.systemPrompt, "prefix\n\n\nsuffix");
+  assert.deepEqual(event.systemPromptOptions.sections, { ponytail: "untouched", "erosiano-dev": current });
+  const mismatched = "[Engineering Proxy Policy]\nold\n[End erosiano-dev Policy]\nunowned";
+  const warnings = [];
+  assert.equal(augmentSystemPrompt({ systemPrompt: mismatched }, current, m => warnings.push(m)), undefined);
+  assert.equal(warnings.length, 1);
+});

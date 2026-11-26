@@ -91,15 +91,15 @@ export class KsdRuntime {
         } catch {
           // Theme rendering is optional.
         }
-        status = `${colored} 🛡 KSD: ${mode.toUpperCase()}`;
+        status = `${colored} 🛡 EROSIANO: ${mode.toUpperCase()}`;
         if (notice) status += `; ${notice}`;
       }
-      else if (notice) status = `⚠ KSD: ${notice}`;
+      else if (notice) status = `⚠ EROSIANO: ${notice}`;
 
       const before = this.statuses.get(ui);
       if (before && before.value === status && before.theme === theme) return;
 
-      ui.setStatus("engineering-proxy", status);
+      ui.setStatus("erosiano-dev", status);
       this.statuses.set(ui, { value: status, theme, notice });
     } catch {
       // Decorative UI must never cause a coding session to fail.

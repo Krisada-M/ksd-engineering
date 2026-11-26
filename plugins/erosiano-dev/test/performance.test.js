@@ -39,7 +39,7 @@ test("hot-path config is cached until a deliberate refresh", () => {
   assert.equal(r.cache.getConfig("/repo").enabled, true, "cached mode stable within turn");
   assert.equal(r.cache.getConfig("/repo", true).enabled, false);
   r.cache.syncStatus(r.ctx, false, "balanced");
-  assert.deepEqual(r.counters.statuses.at(-1), ["engineering-proxy", undefined]);
+  assert.deepEqual(r.counters.statuses.at(-1), ["erosiano-dev", undefined]);
   assert.equal(r.counters.reads, 2);
 });
 
@@ -104,8 +104,8 @@ test("mode changes update status without replacing the Ponytail status key", () 
   const r = createRig();
   r.cache.syncStatus(r.ctx, false, "balanced");
   r.cache.syncStatus(r.ctx, false, "adaptive");
-  assert.deepEqual(r.counters.statuses.map(([key]) => key), ["engineering-proxy", "engineering-proxy"]);
-  assert.match(r.counters.statuses.at(-1)[1], /KSD: ADAPTIVE/);
+  assert.deepEqual(r.counters.statuses.map(([key]) => key), ["erosiano-dev", "erosiano-dev"]);
+  assert.match(r.counters.statuses.at(-1)[1], /EROSIANO: ADAPTIVE/);
 });
 
 test("theme replacement redraws status, theme failure degrades safely", () => {

@@ -25,14 +25,14 @@ function ensureInstalled() {
   const packed = JSON.parse(execFileSync("npm", ["pack", pluginDir, "--ignore-scripts", "--json", "--pack-destination", packDestination], {
     cwd: repoRoot, encoding: "utf8", timeout: 120_000,
   }));
-  const entry = Array.isArray(packed) ? packed[0] : packed["omp-engineering-proxy"];
+  const entry = Array.isArray(packed) ? packed[0] : packed["omp-erosiano-dev"];
   const tarball = join(packDestination, entry.filename);
   execFileSync("npm", ["install", "--prefix", consumerPrefix, "--ignore-scripts", "--offline", "--no-audit", "--no-fund", tarball], {
     encoding: "utf8", timeout: 180_000,
   });
 
-  shared = { consumerPrefix, pluginRoot: realpathSync(join(consumerPrefix, "node_modules", "omp-engineering-proxy")) };
-  assert.equal(shared.pluginRoot, join(realpathSync(consumerPrefix), "node_modules", "omp-engineering-proxy"));
+  shared = { consumerPrefix, pluginRoot: realpathSync(join(consumerPrefix, "node_modules", "omp-erosiano-dev")) };
+  assert.equal(shared.pluginRoot, join(realpathSync(consumerPrefix), "node_modules", "omp-erosiano-dev"));
   assert.notEqual(shared.pluginRoot, pluginDir);
 
   return shared;
@@ -48,25 +48,25 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 const root = ${JSON.stringify(pluginRoot)};
 const entries = [
-  ["omp-engineering-proxy", "index.js"],
-  ["omp-engineering-proxy/eslint", "eslint-rules/index.js"],
-  ["omp-engineering-proxy/index.js", "index.js"],
-  ["omp-engineering-proxy/eslint-rules/index.js", "eslint-rules/index.js"],
-  ["omp-engineering-proxy/policy.js", "policy.js"],
-  ["omp-engineering-proxy/sdlc.js", "sdlc.js"],
-  ["omp-engineering-proxy/change-scope.js", "change-scope.js"],
-  ["omp-engineering-proxy/review-verdict.js", "review-verdict.js"],
-  ["omp-engineering-proxy/dist/runtime.js", "dist/runtime.js"],
+  ["omp-erosiano-dev", "index.js"],
+  ["omp-erosiano-dev/eslint", "eslint-rules/index.js"],
+  ["omp-erosiano-dev/index.js", "index.js"],
+  ["omp-erosiano-dev/eslint-rules/index.js", "eslint-rules/index.js"],
+  ["omp-erosiano-dev/policy.js", "policy.js"],
+  ["omp-erosiano-dev/sdlc.js", "sdlc.js"],
+  ["omp-erosiano-dev/change-scope.js", "change-scope.js"],
+  ["omp-erosiano-dev/review-verdict.js", "review-verdict.js"],
+  ["omp-erosiano-dev/dist/runtime.js", "dist/runtime.js"],
 ];
 for (const [specifier, path] of entries) {
   assert.equal(realpathSync(fileURLToPath(import.meta.resolve(specifier))), realpathSync(join(root, path)), specifier);
   await import(specifier);
 }
 for (const path of ["package.json", "check-changed.js", "review-verdict.js"]) {
-  assert.equal(realpathSync(fileURLToPath(import.meta.resolve("omp-engineering-proxy/" + path))), realpathSync(join(root, path)), path);
+  assert.equal(realpathSync(fileURLToPath(import.meta.resolve("omp-erosiano-dev/" + path))), realpathSync(join(root, path)), path);
 }
-assert.equal(typeof (await import("omp-engineering-proxy")).default, "function");
-assert.equal(typeof (await import("omp-engineering-proxy/eslint")).default.rules["blank-before-return"], "object");
+assert.equal(typeof (await import("omp-erosiano-dev")).default, "function");
+assert.equal(typeof (await import("omp-erosiano-dev/eslint")).default.rules["blank-before-return"], "object");
 `);
   const result = spawnSync(process.execPath, [probe], { cwd: consumerPrefix, encoding: "utf8", timeout: 30_000 });
   assert.equal(result.status, 0, `consumer imports failed: ${result.stderr}`);
@@ -134,7 +134,7 @@ test("host ESLint uses installed plugin with real JavaScript and TypeScript", ()
   const { consumerPrefix } = ensureInstalled();
   writeFileSync(join(consumerPrefix, "consumer.config.mjs"), `
 import tseslint from ${JSON.stringify(parserUrl)};
-import engineeringProxy from "omp-engineering-proxy/eslint";
+import engineeringProxy from "omp-erosiano-dev/eslint";
 const rules = {
   "engineering-proxy/blank-before-return": "error",
   "engineering-proxy/blank-between-functions": "error",

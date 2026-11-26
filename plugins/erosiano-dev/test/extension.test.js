@@ -34,7 +34,7 @@ function harness(commandNames = ["ponytail"]) {
 
 test("namespace does not collide with Ponytail commands or modes", () => {
   const h = harness();
-  assert.deepEqual([...h.commands.keys()], ["engineering-proxy", "engineering-review"]);
+  assert.deepEqual([...h.commands.keys()], ["erosiano-dev", "engineering-proxy", "engineering-review"]);
   assert.deepEqual([...h.events.keys()], ["session_start", "session_tree", "session_switch", "session_branch", "agent_start", "agent_end", "before_agent_start"]);
 });
 
@@ -44,10 +44,10 @@ test("structured sections preserve Ponytail and are stable on repeated hooks", (
   try {
     const e = { systemPromptOptions: { sections: { ponytail: "Ponytail full rules" } } };
     h.events.get("before_agent_start")(e, h.ctx(dir));
-    const original = e.systemPromptOptions.sections["engineering-proxy"];
+    const original = e.systemPromptOptions.sections["erosiano-dev"];
     h.events.get("before_agent_start")(e, h.ctx(dir));
     assert.equal(e.systemPromptOptions.sections.ponytail, "Ponytail full rules");
-    assert.equal(e.systemPromptOptions.sections["engineering-proxy"], original);
+    assert.equal(e.systemPromptOptions.sections["erosiano-dev"], original);
     assert.match(original, /Ponytail owns YAGNI/i);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -71,7 +71,7 @@ test("works when Ponytail is absent", async () => {
   const h = harness([]);
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
-    await h.commands.get("engineering-proxy").handler("", h.ctx(dir));
+    await h.commands.get("erosiano-dev").handler("", h.ctx(dir));
     assert.match(h.notices[0][0], /not detected\/unknown/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -80,11 +80,11 @@ test("off mode in per-repo config prevents injection", () => {
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
     mkdirSync(join(dir, ".git"));
-    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+    writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
     const h = harness();
     const event = { systemPromptOptions: { sections: { ponytail: "still on" } } };
     assert.equal(h.events.get("before_agent_start")(event, h.ctx(dir)), undefined);
-    assert.equal(event.systemPromptOptions.sections["engineering-proxy"], undefined);
+    assert.equal(event.systemPromptOptions.sections["erosiano-dev"], undefined);
     assert.equal(event.systemPromptOptions.sections.ponytail, "still on");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -94,7 +94,7 @@ test("findProjectRoot respects nested cwd and local policy", () => {
   try {
     mkdirSync(join(dir, ".git"));
     mkdirSync(join(dir, "src"));
-    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false, enforcement: "balanced" }));
+    writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false, enforcement: "balanced" }));
     assert.equal(findProjectRoot(join(dir, "src")), dir);
     assert.equal(loadConfig(join(dir, "src")).enabled, false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -120,7 +120,7 @@ test("malformed JSON disables policy with explicit warning rather than crashing"
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
     mkdirSync(join(dir, ".git"));
-    writeFileSync(join(dir, ".engineering-proxy.json"), "{ broken");
+    writeFileSync(join(dir, ".erosiano-dev.json"), "{ broken");
     const config = loadConfig(dir);
     assert.equal(config.enabled, false);
     assert.ok(config.configError);
@@ -133,7 +133,7 @@ test("review only starts on explicit command, one request per trigger, and queue
   try {
     h.events.get("before_agent_start")({ systemPromptOptions: { sections: {} } }, h.ctx(dir));
     assert.equal(h.sent.length, 0);
-    await h.commands.get("engineering-review").handler("apps/web/features/auth", h.ctx(dir, false));
+    await h.commands.get("erosiano-dev").handler("review apps/web/features/auth", h.ctx(dir, false));
     assert.equal(h.sent.length, 1);
     assert.match(h.sent[0].message, /apps\/web\/features\/auth/);
     assert.match(h.sent[0].message, /Scope: inspect the actual diff/);
@@ -152,10 +152,10 @@ test("disabling the extension clears a previously attached structured policy, no
   try {
     mkdirSync(join(dir, ".git"));
     const h = harness();
-    const event = { systemPromptOptions: { sections: { ponytail: "full", "engineering-proxy": "stale" } } };
-    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+    const event = { systemPromptOptions: { sections: { ponytail: "full", "erosiano-dev": "stale" } } };
+    writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
     h.events.get("before_agent_start")(event, h.ctx(dir));
-    assert.equal(event.systemPromptOptions.sections["engineering-proxy"], undefined);
+    assert.equal(event.systemPromptOptions.sections["erosiano-dev"], undefined);
     assert.equal(event.systemPromptOptions.sections.ponytail, "full");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -164,11 +164,11 @@ test("invalid per-repo config never silently enables guidance", () => {
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
     mkdirSync(join(dir, ".git"));
-    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: "false" }));
+    writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: "false" }));
     const h = harness();
     const event = { systemPromptOptions: { sections: {} } };
     h.events.get("before_agent_start")(event, h.ctx(dir));
-    assert.equal(event.systemPromptOptions.sections["engineering-proxy"], undefined);
+    assert.equal(event.systemPromptOptions.sections["erosiano-dev"], undefined);
     assert.ok(loadConfig(dir).configError);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -182,9 +182,9 @@ test("session lifecycle shows a separate KSD status without touching Ponytail", 
     h.events.get("session_switch")({}, ctx);
     h.events.get("session_branch")({}, ctx);
     assert.deepEqual(h.statuses, [
-      ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
-      ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
-      ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
+      ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"],
+      ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"],
+      ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"],
     ]);
     assert.equal(h.sent.length, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -196,9 +196,9 @@ test("repo disabling clears KSD status while leaving Ponytail alone", () => {
   try {
     mkdirSync(join(dir, ".git"));
     h.events.get("session_start")({}, h.ctx(dir));
-    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+    writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
     h.events.get("before_agent_start")({ systemPromptOptions: { sections: { ponytail: "full" } } }, h.ctx(dir));
-    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", undefined]);
+    assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", undefined]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -207,9 +207,9 @@ test("invalid config fails closed, clears stale status and preserves session", (
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
     mkdirSync(join(dir, ".git"));
-    writeFileSync(join(dir, ".engineering-proxy.json"), "{ invalid");
+    writeFileSync(join(dir, ".erosiano-dev.json"), "{ invalid");
     h.events.get("session_start")({}, h.ctx(dir));
-    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", undefined]);
+    assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", undefined]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -227,7 +227,7 @@ test("explicit review preserves KSD status and does not overwrite built-in revie
   const dir = mkdtempSync(join(tmpdir(), "engineering-proxy-"));
   try {
     await h.commands.get("engineering-review").handler("", h.ctx(dir));
-    assert.deepEqual(h.statuses, [["engineering-proxy", "○ 🛡 KSD: BALANCED"]]);
+    assert.deepEqual(h.statuses, [["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]]);
     assert.equal(h.sent.length, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -243,11 +243,11 @@ test("agent lifecycle renders filled dot while running, hollow dot when idle", (
     h.events.get("agent_end")({}, ctx);
 
     assert.deepEqual(h.statuses.map(([, label]) => label), [
-      "○ 🛡 KSD: BALANCED",
-      "● 🛡 KSD: BALANCED",
-      "○ 🛡 KSD: BALANCED",
+      "○ 🛡 EROSIANO: BALANCED",
+      "● 🛡 EROSIANO: BALANCED",
+      "○ 🛡 EROSIANO: BALANCED",
     ]);
-    assert.equal(h.statuses.every(([key]) => key === "engineering-proxy"), true);
+    assert.equal(h.statuses.every(([key]) => key === "erosiano-dev"), true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -260,8 +260,8 @@ test("new session, switch and branch reset stale activity without touching Ponyt
       h.events.get("agent_start")({}, ctx);
       h.events.get(lifecycleEvent)({}, ctx);
       assert.deepEqual(h.statuses.slice(-2), [
-        ["engineering-proxy", "● 🛡 KSD: BALANCED"],
-        ["engineering-proxy", "○ 🛡 KSD: BALANCED"],
+        ["erosiano-dev", "● 🛡 EROSIANO: BALANCED"],
+        ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"],
       ]);
     }
     assert.equal(h.sent.length, 0);
@@ -275,14 +275,14 @@ test("disabled project clears status even when agent is active", () => {
     mkdirSync(join(dir, ".git"));
     const ctx = h.ctx(dir);
     h.events.get("agent_start")({}, ctx);
-    writeFileSync(join(dir, ".engineering-proxy.json"), JSON.stringify({ enabled: false }));
+    writeFileSync(join(dir, ".erosiano-dev.json"), JSON.stringify({ enabled: false }));
     h.events.get("before_agent_start")({ systemPromptOptions: { sections: { ponytail: "full" } } }, ctx);
     assert.deepEqual(h.statuses.slice(-2), [
-      ["engineering-proxy", "● 🛡 KSD: BALANCED"],
-      ["engineering-proxy", undefined],
+      ["erosiano-dev", "● 🛡 EROSIANO: BALANCED"],
+      ["erosiano-dev", undefined],
     ]);
     h.events.get("agent_end")({}, ctx);
-    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", undefined]);
+    assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", undefined]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -296,9 +296,9 @@ test("uses OMP theme for colored dots when available", () => {
     h.events.get("agent_start")({}, ctx);
     h.events.get("agent_end")({}, ctx);
     assert.deepEqual(h.statuses.map(([, label]) => label), [
-      "[dim:○] 🛡 KSD: BALANCED",
-      "[accent:●] 🛡 KSD: BALANCED",
-      "[dim:○] 🛡 KSD: BALANCED",
+      "[dim:○] 🛡 EROSIANO: BALANCED",
+      "[accent:●] 🛡 EROSIANO: BALANCED",
+      "[dim:○] 🛡 EROSIANO: BALANCED",
     ]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -310,7 +310,7 @@ test("theme failures and unsupported UI never crash the activity lifecycle", () 
     const ctx = h.ctx(dir);
     Object.defineProperty(ctx.ui, "theme", { get() { throw new Error("Theme unavailable"); } });
     assert.doesNotThrow(() => h.events.get("agent_start")({}, ctx));
-    assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "● 🛡 KSD: BALANCED"]);
+    assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "● 🛡 EROSIANO: BALANCED"]);
     assert.doesNotThrow(() => h.events.get("agent_end")({}, { cwd: dir, ui: { setStatus() { throw new Error("TUI disconnected"); } } }));
     assert.doesNotThrow(() => h.events.get("session_start")({}, { cwd: dir, ui: {} }));
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -329,18 +329,18 @@ test("baseline is explicit, read-only guidance and uses host follow-up delivery"
     const event = { systemPromptOptions: { sections: { ponytail: "preserved" } } };
     h.events.get("before_agent_start")(event, h.ctx(dir));
     assert.equal(h.sent.length, 0);
-    assert.match(event.systemPromptOptions.sections["engineering-proxy"], /establish a scoped project baseline/);
-    assert.doesNotMatch(event.systemPromptOptions.sections["engineering-proxy"], /Project baseline discovery \(read-only/);
+    assert.match(event.systemPromptOptions.sections["erosiano-dev"], /establish a scoped project baseline/);
+    assert.doesNotMatch(event.systemPromptOptions.sections["erosiano-dev"], /Project baseline discovery \(read-only/);
     assert.equal(event.systemPromptOptions.sections.ponytail, "preserved");
 
-    await h.commands.get("engineering-proxy").handler("baseline Apps/Web", h.ctx(dir, false));
+    await h.commands.get("erosiano-dev").handler("baseline Apps/Web", h.ctx(dir, false));
     assert.equal(h.sent.length, 1);
     assert.match(h.sent[0].message, /Do not implement changes or execute project checks/);
     assert.match(h.sent[0].message, /CURRENT, LEGACY, TRANSITIONAL, LOCAL, EXCEPTION or UNKNOWN/);
     assert.match(h.sent[0].message, /Baseline scope: Apps\/Web$/);
     assert.deepEqual(h.sent[0].options, { deliverAs: "followUp" });
 
-    await h.commands.get("engineering-proxy").handler("baseline", h.ctx(dir));
+    await h.commands.get("erosiano-dev").handler("baseline", h.ctx(dir));
     assert.equal(h.sent.length, 2);
     assert.match(h.sent[1].message, /Baseline scope: current working directory\.$/);
     assert.equal(h.sent[1].options, undefined);
@@ -353,8 +353,8 @@ test("disabled or invalid config does not dispatch baseline guidance", async () 
   try {
     mkdirSync(join(dir, ".git"));
     for (const config of ['{"enabled":false}', "{"]) {
-      writeFileSync(join(dir, ".engineering-proxy.json"), config);
-      await h.commands.get("engineering-proxy").handler("baseline", h.ctx(dir));
+      writeFileSync(join(dir, ".erosiano-dev.json"), config);
+      await h.commands.get("erosiano-dev").handler("baseline", h.ctx(dir));
       assert.equal(h.sent.length, 0);
       assert.match(h.notices.at(-1)[0], /disabled/);
     }
@@ -369,4 +369,44 @@ test("both modes carry minimal baseline guidance without the full checklist", ()
     assert.match(policy, /Never copy insecure legacy behavior/);
     assert.doesNotMatch(policy, /Project baseline discovery \(read-only/);
   }
+});
+
+test("canonical and compatibility commands delegate one review per explicit request", async () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "erosiano-alias-"));
+  try {
+    const ctx = h.ctx(dir);
+    assert.equal(h.commands.get("erosiano-dev"), h.commands.get("engineering-proxy"));
+    await h.commands.get("engineering-proxy").handler("review Apps/Web", ctx);
+    assert.equal(h.sent.length, 1);
+    assert.match(h.sent[0].message, /Review scope: Apps\/Web$/);
+    await h.commands.get("engineering-review").handler("Apps/API", ctx);
+    assert.equal(h.sent.length, 2);
+    assert.match(h.sent[1].message, /Review scope: Apps\/API$/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("detected legacy commands prevent second extension activation", () => {
+  const h = harness(["engineering-proxy", "ponytail"]);
+  assert.equal(h.commands.size, 0);
+  assert.deepEqual([...h.events.keys()], ["session_start"]);
+  h.events.get("session_start")({}, h.ctx(process.cwd()));
+  assert.match(h.notices[0][0], /not activated/);
+});
+
+test("both disable flags inhibit canonical baseline and prompt", async () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "erosiano-env-"));
+  try {
+    for (const flag of ["ENGINEERING_PROXY_DISABLED", "EROSIANO_DEV_DISABLED"]) {
+      process.env[flag] = "1";
+      try {
+        const event = { systemPromptOptions: { sections: { ponytail: "preserve", "engineering-proxy": "legacy", "erosiano-dev": "current" } } };
+        h.events.get("before_agent_start")(event, h.ctx(dir));
+        assert.deepEqual(event.systemPromptOptions.sections, { ponytail: "preserve" });
+        await h.commands.get("erosiano-dev").handler("baseline", h.ctx(dir));
+        assert.equal(h.sent.length, 0);
+      } finally { delete process.env[flag]; }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

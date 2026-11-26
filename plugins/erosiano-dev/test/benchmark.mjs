@@ -14,9 +14,9 @@ const WARMUP_BATCHES = 3;
 const SAMPLE_BATCHES = 12;
 const dir = mkdtempSync(join(tmpdir(), "ksd-ts-bench-"));
 const cwd = join(dir, "project");
-const globalConfigPath = join(dir, "global", "engineering-proxy.json");
-const projectConfigPath = join(cwd, ".engineering-proxy.json");
-const previousDisabled = process.env.ENGINEERING_PROXY_DISABLED;
+const globalConfigPath = join(dir, "global", "erosiano-dev.json");
+const projectConfigPath = join(cwd, ".erosiano-dev.json");
+const previousDisabled = process.env.EROSIANO_DEV_DISABLED;
 const originalGetConfig = KsdRuntime.prototype.getConfig;
 const instrumented = new WeakSet();
 let activeCounts;
@@ -54,7 +54,7 @@ try {
   mkdirSync(join(dir, "global"), { recursive: true });
   writeFileSync(globalConfigPath, '{"enabled":true,"enforcement":"balanced"}');
   writeFileSync(projectConfigPath, '{"enabled":true,"enforcement":"balanced"}');
-  process.env.ENGINEERING_PROXY_DISABLED = "0";
+  process.env.EROSIANO_DEV_DISABLED = "0";
 
   function harness() {
     const events = new Map();
@@ -71,7 +71,7 @@ try {
         setStatus() { if (activeCounts) activeCounts.statusWrites++; },
       },
       sessionManager: {
-        getBranch: () => [{ type: "custom", customType: "engineering-proxy-mode", data: { mode } }],
+        getBranch: () => [{ type: "custom", customType: "erosiano-dev-mode", data: { mode } }],
       },
     };
     const prompt = { systemPromptOptions: { sections: {} } };
@@ -91,10 +91,10 @@ try {
   // Read exactly what the real hook places into the host's structured prompt.
   const policyHarness = harness();
   policyHarness.turn();
-  const emitted = { balanced: policyHarness.prompt.systemPromptOptions.sections["engineering-proxy"] };
+  const emitted = { balanced: policyHarness.prompt.systemPromptOptions.sections["erosiano-dev"] };
   policyHarness.switchMode();
   policyHarness.turn();
-  emitted.adaptive = policyHarness.prompt.systemPromptOptions.sections["engineering-proxy"];
+  emitted.adaptive = policyHarness.prompt.systemPromptOptions.sections["erosiano-dev"];
   assert.equal(typeof emitted.balanced, "string");
   assert.equal(typeof emitted.adaptive, "string");
   assert.notEqual(emitted.balanced, emitted.adaptive);
@@ -184,7 +184,7 @@ try {
   process.stdout.write("In-process hook timings include instrumentation; they exclude the OMP host, agents and model latency. No live speedup claim.\n");
 } finally {
   KsdRuntime.prototype.getConfig = originalGetConfig;
-  if (previousDisabled === undefined) delete process.env.ENGINEERING_PROXY_DISABLED;
-  else process.env.ENGINEERING_PROXY_DISABLED = previousDisabled;
+  if (previousDisabled === undefined) delete process.env.EROSIANO_DEV_DISABLED;
+  else process.env.EROSIANO_DEV_DISABLED = previousDisabled;
   rmSync(dir, { force: true, recursive: true });
 }
