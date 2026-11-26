@@ -1,4 +1,4 @@
-import { readPracticeCatalog, resolveFreshPractices, resolvePractices } from "./practices.js";
+import { composePracticePack, readPracticeCatalog, resolveFreshPractices, resolvePractices } from "./practices.js";
 
 const MAX_INPUT_BYTES = 64 * 1024;
 const MAX_OUTPUT_CHARS = 12000;
@@ -12,10 +12,18 @@ export function resolvePracticeTool(input, { root } = {}) {
   try {
     const catalog = readPracticeCatalog();
     if (input.group !== undefined && !catalog.practices.some(rule => rule.group === input.group)) return result("NOT_ASSESSED: unknown practice group", {}, true);
+    if (input.format !== undefined && !["decisions", "policy"].includes(input.format)) return result("NOT_ASSESSED: unknown output format", {}, true);
     const context = JSON.parse(input.context);
     const fresh = context && Object.hasOwn(context, "baseline");
     if (fresh && !root) return result("NOT_ASSESSED: fresh selection requires the host-selected project root", {}, true);
     const selection = fresh ? resolveFreshPractices(context, { root }, catalog) : resolvePractices(context, catalog);
+    if (input.format === "policy") {
+      if (!fresh) return result("NOT_ASSESSED: a policy pack requires fresh sampled evidence", {}, true);
+      const pack = composePracticePack(selection, { group: input.group });
+      const { text, ...details } = pack;
+
+      return result(text, { ...details, evidence: selection.evidence, baseline: selection.baseline });
+    }
     const decisions = input.group === undefined ? selection.decisions : selection.decisions.filter(rule => rule.group === input.group);
     const counts = Object.fromEntries(["APPLICABLE", "CONFLICT", "SUPPRESSED", "UNKNOWN", "NOT_APPLICABLE"].map(status => [status, decisions.filter(rule => rule.status === status).length]));
     const summary = { evidence: selection.evidence, group: input.group ?? "all", counts, totalCatalogEntries: selection.decisions.length, ...(fresh ? { baseline: selection.baseline, unresolvedFacets: selection.unresolvedFacets, limitation: selection.limitation } : {}) };
@@ -42,8 +50,8 @@ export function registerPracticeTool(pi, { optedIn, isEnabled, getRoot }) {
     pi.registerTool({
       name: "erosiano_resolve_practices",
       label: "erosiano-dev Practice Resolver",
-      description: "After scoped baseline discovery, resolve applicable practices from explicit observed true/false facets; omitted facets are unknown. Pass JSON context with facets, optional projectOverrides, enabledGates, mode; optional group narrows output. To bind selection to fresh sampled bytes, add baseline (scope, additionalPaths, fingerprint), observations, and provenance for overrides/gates. Root is selected by the host. Supplied interpretations are not verification.",
-      parameters: z.object({ context: z.string(), group: z.string().optional() }),
+      description: "After scoped baseline discovery, resolve applicable practices from explicit observed true/false facets; omitted facets are unknown. Pass JSON context with facets, optional projectOverrides, enabledGates, mode; optional group narrows output. To bind selection to fresh sampled bytes, add baseline (scope, additionalPaths, fingerprint), observations, and provenance for overrides/gates. Root is selected by the host. Optional format policy returns a bounded task-specific pack only from fresh evidence. Supplied interpretations are not verification.",
+      parameters: z.object({ context: z.string(), group: z.string().optional(), format: z.string().optional() }),
       approval: "read",
       async execute(_id, input, signal, _onUpdate, ctx) {
         if (signal?.aborted) return result("NOT_ASSESSED: cancelled", {}, true);

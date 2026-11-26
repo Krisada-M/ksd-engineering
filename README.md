@@ -96,6 +96,18 @@ These are illustrative project-specific paths/facets; use actual inspected files
 
 A matched fingerprint proves only that **sampled evidence bytes** matched during the bounded capture; it does not prove semantic classification, completeness, safety, or native gate execution. Inspect all affected consumers and verify actual checks. No whole-repository cache or automatic project policy enforcement is claimed.
 
+## Contextual policy packs and release checks
+
+After collecting a fresh scoped baseline and recording observations, run:
+
+```bash
+erosiano-practices --context context.json --root . --policy --group typescript
+```
+
+Omit the group for a bounded cross-group pack; the optional registered resolver accepts `format: "policy"`. Packs are composed from fresh sampled bytes and catalog text only, without copying raw provenance or project instructions into a higher-priority policy. They list conflicts and unresolved safety risks across groups, project-preference suppressions and omitted IDs. An oversized pack requires narrowing, not silently dropping gates. Balanced nesting review remains advisory; adaptive findings are conditional on a proven behavior-preserving transformation. Established project error contracts can override the Result preference, never required safety or native gates. Ordinary turns retain a short core; explicit review and practice commands direct the agent to the scoped selection. Actual agent adherence still needs comparative evaluation.
+
+The release protocol now includes a pinned-plan threshold assessor and a fixed v1 acceptance gate. See [validation protocol](docs/EROSIANO_DEV_VALIDATION.md). The real-host command smoke is explicitly operator-run with an installed trusted OMP binary; it does not invoke a model or install dependencies. These tools are not evidence of a completed live test or v1.0 release.
+
 ## Ownership boundaries
 
 - **Ponytail** owns YAGNI, removing needless abstractions, and `ponytail-review`.

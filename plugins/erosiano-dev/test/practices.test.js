@@ -9,7 +9,7 @@ test("registry preserves 138 stable unique practice identifiers and known applic
   assert.equal(catalog.practices.length, 138);
   assert.equal(new Set(catalog.practices.map(rule => rule.id)).size, 138);
   assert.equal(new Set(catalog.practices.map(rule => rule.group)).size, 12);
-  assert.ok(catalog.practices.every(rule => rule.version === 1));
+  assert.deepEqual(catalog.practices.filter(rule => rule.version !== 1).map(rule => [rule.id, rule.version]), [["S01", 2], ["S05", 2], ["S10", 2]]);
 });
 
 test("explicit facts select TS and React rules, not unrelated database or auth", () => {
@@ -46,4 +46,17 @@ test("unknown or malformed facts and overrides do not silently pass", () => {
   const result = resolvePractices({ facets: {} });
   assert.equal(byId(result, "SEC03").status, "UNKNOWN");
   assert.equal(byId(result, "SEC03").level, "ADVISORY");
+});
+
+test("mode-sensitive style review remains advisory or conditional; error conventions may override preferences", () => {
+  const context = { facets: { code: true, error: true, review: true }, projectOverrides: {
+    S05: { disposition: "prefer-project", reason: "Established exception contract", evidence: "AGENTS.md:2" },
+  } };
+  const balanced = resolvePractices(context);
+  const adaptive = resolvePractices({ ...context, mode: "adaptive" });
+  assert.equal(byId(balanced, "S01").level, "ADVISORY");
+  assert.equal(byId(adaptive, "S01").reviewDisposition, "FIX_REQUIRED_IF_BEHAVIOR_PRESERVING");
+  assert.equal(byId(adaptive, "S01").level, "PREFERRED");
+  assert.equal(byId(adaptive, "S05").status, "SUPPRESSED");
+  assert.equal(byId(resolvePractices({ ...context, enabledGates: ["S01"] }), "S01").level, "REQUIRED");
 });

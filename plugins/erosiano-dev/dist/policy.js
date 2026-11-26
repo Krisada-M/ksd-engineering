@@ -99,7 +99,7 @@ ${cleanCode}
 - Before substantial changes, establish a scoped project baseline from instructions, native gates, maintained local code and tests; distinguish current, legacy and unknown, refresh stale evidence. Preserve architecture, contracts, validation and accessibility; no unrelated refactors. Never copy insecure legacy behavior.
 - Ponytail owns YAGNI/simplification and /ponytail-review; do not duplicate or invoke it.
 - Risky behavior (auth/authorization, payments, DB schema/queries/RLS, destructive data operations, secrets, concurrency): prove normal-user denial (cross-tenant, another owner's record, unauthenticated), keep idempotency and replay protection, check constraints, locks, transaction boundaries and migration compatibility. Never run real payments or destructive shared-database checks.
-- Validate runtime boundaries, handle promise rejection and exhaustive states; preserve error causes. Never weaken types, security or tests to pass, invent APIs, or leave fake production success. Select applicable practices after baseline; never inject the entire catalog.
+- Validate runtime boundaries, handle promise rejection and exhaustive states; preserve error causes. Never weaken types, security or tests to pass, invent APIs, or leave fake production success. For substantial tasks select applicable practices after baseline via permitted resolver or catalog; refresh when evidence changes. Never inject the entire catalog.
 - Never claim a check passed without running it.
 Enforcement=${enforcement}: repo gates stay authoritative; these rules are deterministic only where the repo enables the KSD ESLint profile. The full SDLC checklist is delivered by /erosiano-dev review.
 ${POLICY_END}`;

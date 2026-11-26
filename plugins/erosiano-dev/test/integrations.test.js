@@ -52,3 +52,10 @@ test("practice tool bounds input and output without implying missing rules passe
   assert.equal(JSON.parse(limited.content[0].text).limited, true);
   assert.match(limited.content[0].text, /No omitted rule is waived/);
 });
+
+test("policy pack tool refuses unauthenticated supplied-only context", () => {
+  const response = resolvePracticeTool({ context: '{"facets":{"code":true}}', format: "policy" });
+  assert.equal(response.isError, true);
+  assert.match(response.content[0].text, /requires fresh sampled evidence/);
+  assert.equal(resolvePracticeTool({ context: '{"facets":{}}', format: "unknown" }).isError, true);
+});

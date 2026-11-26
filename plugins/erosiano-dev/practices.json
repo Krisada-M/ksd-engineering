@@ -302,10 +302,10 @@
     },
     {
       "id": "S01",
-      "version": 1,
+      "version": 2,
       "group": "style",
       "title": "Guard clauses, flat flow, early exits",
-      "intent": "avoid nested if and else after return where semantics permit; balanced/adaptive behavior as above.",
+      "intent": "Prefer guard clauses and early returns where behavior is preserved. Balanced nesting findings are advisory; adaptive avoidable nesting is fix-required in changed-scope review only when a behavior-preserving transformation is established. Warn on uncertain or behavior-sensitive cases.",
       "allOf": [],
       "anyOf": [
         "code",
@@ -372,10 +372,10 @@
     },
     {
       "id": "S05",
-      "version": 1,
+      "version": 2,
       "group": "style",
       "title": "Typed Result vs exception boundary",
-      "intent": "prefer discriminated domain results and thrown IO failures caught at appropriate boundary; preserve existing error contracts.",
+      "intent": "Prefer discriminated domain results and thrown IO failures caught at the appropriate boundary. Preserve established project error contracts and never weaken error handling.",
       "allOf": [],
       "anyOf": [
         "error",
@@ -386,7 +386,7 @@
         "guidance",
         "review"
       ],
-      "defaultLevel": "REQUIRED",
+      "defaultLevel": "PREFERRED",
       "safetyInvariant": false
     },
     {
@@ -459,10 +459,10 @@
     },
     {
       "id": "S10",
-      "version": 1,
+      "version": 2,
       "group": "style",
       "title": "Evidence and risky-behavior escalation",
-      "intent": "never claim unexecuted checks pass; risk controls in section 6.8.",
+      "intent": "Never claim unexecuted checks pass. Escalate authentication, authorization, payment, data, secret, concurrency and destructive behavior to applicable security and verification rules.",
       "allOf": [],
       "anyOf": [
         "review",

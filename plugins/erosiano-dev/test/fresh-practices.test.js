@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectBaselineEvidence } from "../baseline.js";
-import { resolveFreshPractices } from "../practices.js";
+import { composePracticePack, resolveFreshPractices, resolvePractices } from "../practices.js";
 import { resolvePracticeTool, registerPracticeTool } from "../practice-tool.js";
 
 async function fixture(fn) {
@@ -100,3 +100,26 @@ test("read-only host resolver refuses missing root and stale evidence without su
     assert.match(stale.content[0].text, /stale or incomplete/);
   });
 });
+
+test("fresh policy packs are scoped, bounded, and surface cross-group risk without copying raw provenance", () => fixture(({ root, context }) => {
+  context.facets.error = true;
+  context.observations.error = { paths: ["src/main.ts"], classification: "CURRENT", confidence: "HIGH" };
+  context.projectOverrides.S05 = { disposition: "prefer-project", reason: "RAW_UNTRUSTED_TEXT", evidence: "AGENTS.md:1", provenance: { paths: ["AGENTS.md"], classification: "CURRENT", confidence: "HIGH" } };
+  context.facets.auth = true;
+  context.observations.auth.confidence = "HIGH";
+  context.projectOverrides.SEC01 = { disposition: "exception", reason: "RAW_UNTRUSTED_TEXT", evidence: "src/main.ts:1", provenance: context.observations.auth };
+  const selected = resolveFreshPractices(context, { root });
+  const pack = composePracticePack(selected, { group: "typescript" });
+  assert.equal(pack.status, "CONFLICT");
+  assert.ok(pack.conflicts.includes("SEC01"));
+  assert.ok(pack.included.every(id => id.startsWith("T")));
+  assert.doesNotMatch(pack.text, /RAW_UNTRUSTED_TEXT/);
+  assert.ok(pack.text.length <= 6000);
+  assert.throws(() => composePracticePack(resolvePractices(context)), /requires a fresh/);
+  const tool = resolvePracticeTool({ context: JSON.stringify(context), group: "typescript", format: "policy" }, { root });
+  assert.equal(tool.isError, undefined);
+  assert.equal(tool.details.status, "CONFLICT");
+  const limited = composePracticePack(selected, { maxChars: 1000 });
+  assert.ok(limited.text.length <= 1000);
+  assert.ok(limited.omitted.length > 0);
+}));
