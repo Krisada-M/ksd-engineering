@@ -212,3 +212,17 @@ export default [
   const js = reports.find(report => report.filePath.endsWith("bad.js"));
   assert.ok(js.messages.some(message => message.ruleId === "engineering-proxy/prefer-guard-clauses" && message.severity === 1 && !message.fix));
 });
+
+test("new installed baseline and practice CLI symlinks work without extra dependencies", () => {
+  const { consumerPrefix } = ensureInstalled();
+  const bin = join(consumerPrefix, "node_modules", ".bin");
+  const practices = spawnSync(join(bin, "erosiano-practices"), ["--group", "typescript"], { cwd: consumerPrefix, encoding: "utf8", timeout: 30000 });
+  assert.equal(practices.status, 0, practices.stderr);
+  assert.equal(JSON.parse(practices.stdout).length, 13);
+  const root = join(temporary, "baseline-fixture");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "main.ts"), "export const value = 1;");
+  const baseline = spawnSync(join(bin, "erosiano-baseline"), ["--root", root, "--scope", "main.ts"], { cwd: consumerPrefix, encoding: "utf8", timeout: 30000 });
+  assert.equal(baseline.status, 0, baseline.stderr);
+  assert.equal(JSON.parse(baseline.stdout).coverage, "SAMPLED_EVIDENCE_ONLY");
+});
