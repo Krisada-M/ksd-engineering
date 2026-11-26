@@ -2,6 +2,7 @@
 import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { collectBaselineEvidence } from "./baseline.js";
 
 const CATALOG_URL = new URL("./practices.json", import.meta.url);
 const MAX_CONTEXT_BYTES = 256 * 1024;
@@ -117,12 +118,60 @@ export function resolvePractices(input, catalog = readPracticeCatalog()) {
   return { schemaVersion: 1, mode: input.mode ?? "balanced", evidence: "SUPPLIED_NOT_AUTHENTICATED", decisions };
 }
 
+// A fresh hash binds the supplied interpretation to the sampled bytes, not to the truth of the interpretation.
+function checkProvenance(provenance, paths) {
+  if (!isRecord(provenance) || !Array.isArray(provenance.paths) || provenance.paths.length < 1 || provenance.paths.length > 24 ||
+      !provenance.paths.every(path => typeof path === "string" && paths.has(path)) ||
+      !["CURRENT", "LEGACY", "TRANSITIONAL", "LOCAL", "EXCEPTION", "UNKNOWN"].includes(provenance.classification) ||
+      !["HIGH", "MEDIUM", "LOW", "UNKNOWN"].includes(provenance.confidence)) {
+    throw new Error("Invalid or unsampled observation provenance");
+  }
+
+  return ["HIGH", "MEDIUM"].includes(provenance.confidence) && ["CURRENT", "LOCAL", "EXCEPTION"].includes(provenance.classification);
+}
+
+/** Explicit opt-in; root is the operator/host-selected root, never an untrusted context field. */
+export function resolveFreshPractices(input, { root, useGit = false }, catalog = readPracticeCatalog()) {
+  validateContext(input, catalog);
+  const baseline = input.baseline;
+  if (!isRecord(baseline) || typeof baseline.scope !== "string" || typeof baseline.fingerprint !== "string" ||
+      !/^[a-f0-9]{64}$/.test(baseline.fingerprint) || Object.hasOwn(baseline, "root") || Object.hasOwn(baseline, "useGit")) {
+    throw new Error("Expected a scoped baseline fingerprint; select the root and native Git option outside the context");
+  }
+  const snapshot = collectBaselineEvidence({ root, scope: baseline.scope, additionalPaths: baseline.additionalPaths ?? [], useGit });
+  if (!snapshot.cacheable || snapshot.fingerprint !== baseline.fingerprint) throw new Error("STALE_OR_INCOMPLETE_BASELINE: recapture and review scoped evidence");
+  const paths = new Set(snapshot.evidence.map(item => item.path));
+  if (!isRecord(input.observations)) throw new Error("Fresh selection requires observation provenance");
+
+  const facets = {};
+  const unresolved = [];
+  for (const [name, value] of Object.entries(input.facets)) {
+    if (!Object.hasOwn(input.observations, name)) throw new Error("Missing facet provenance: " + name);
+    if (checkProvenance(input.observations[name], paths)) facets[name] = value;
+    else unresolved.push(name);
+  }
+  const overrides = input.projectOverrides ?? {};
+  for (const [id, decision] of Object.entries(overrides)) {
+    if (!checkProvenance(decision.provenance, paths)) throw new Error("Uncertain project override: " + id);
+  }
+  const gates = input.enabledGates ?? [];
+  if (gates.length && !isRecord(input.gateEvidence)) throw new Error("Enabled native gates require provenance");
+  for (const id of gates) {
+    if (!Object.hasOwn(input.gateEvidence, id) || !checkProvenance(input.gateEvidence[id], paths)) throw new Error("Uncertain native gate: " + id);
+  }
+
+  const selection = resolvePractices({ ...input, facets }, catalog);
+
+  return { ...selection, evidence: "FRESH_SAMPLED_BYTES_SUPPLIED_SEMANTICS", baseline: { scope: snapshot.scope, fingerprint: snapshot.fingerprint, revision: snapshot.revision, coverage: snapshot.coverage },
+    unresolvedFacets: unresolved.sort(), limitation: "Fresh sampled bytes only; supplied classifications, task semantics and native gate claims are not independently authenticated or executed." };
+}
+
 export function renderPracticeSelection(result) {
   const selected = result.decisions.filter(rule => rule.status === "APPLICABLE" || rule.status === "CONFLICT");
   const lines = selected.map(rule => `${rule.id} [${rule.status}/${rule.level}] ${rule.title}: ${rule.intent}${rule.status === "CONFLICT" ? " — " + rule.reason : ""}`);
   const unknown = result.decisions.filter(rule => rule.status === "UNKNOWN").map(rule => rule.id);
 
-  return [`Practices: ${selected.length} selected/conflicting; ${unknown.length} unresolved. Evidence: supplied, not authenticated.`, ...lines, ...(unknown.length ? ["Unknown applicability: " + unknown.join(", ")] : [])].join("\n");
+  return [`Practices: ${selected.length} selected/conflicting; ${unknown.length} unresolved. Evidence: ${result.evidence}; semantics not authenticated.`, ...lines, ...(unknown.length ? ["Unknown applicability: " + unknown.join(", ")] : [])].join("\n");
 }
 
 function main(args) {
@@ -134,8 +183,11 @@ function main(args) {
 
     return;
   }
-  if (args.length !== 2 || args[0] !== "--context") throw new Error("Usage: erosiano-practices --context context.json | --group group");
-  const result = resolvePractices(readJson(resolve(args[1]), MAX_CONTEXT_BYTES));
+  const usage = "Usage: erosiano-practices --context context.json [--root project [--git]] | --group group";
+  if (args[0] !== "--context" || ![2, 4, 5].includes(args.length) || (args.length >= 4 && args[2] !== "--root") || (args.length === 5 && args[4] !== "--git")) throw new Error(usage);
+  const input = readJson(resolve(args[1]), MAX_CONTEXT_BYTES);
+  if (args.length === 2 && Object.hasOwn(input ?? {}, "baseline")) throw new Error("Fresh context requires an operator-selected --root");
+  const result = args.length >= 4 ? resolveFreshPractices(input, { root: args[3], useGit: args.length === 5 }) : resolvePractices(input);
   console.log(JSON.stringify(result, null, 2));
 }
 

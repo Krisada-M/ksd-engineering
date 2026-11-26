@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { collectBaselineEvidence, ScopedBaselineCache, summarizeBaselineEvidence } from "../baseline.js";
 
@@ -69,3 +70,66 @@ test("oversize and unknown Git metadata cannot produce a freshness match", () =>
   assert.equal(record.revision.status, "unknown");
   assert.match(summarizeBaselineEvidence(record), /not all dirty\/untracked files/);
 }));
+
+test("explicit caller and CI evidence is bounded, included and invalidates the fingerprint", () => fixture(root => {
+  mkdirSync(join(root, "packages", "shared"), { recursive: true });
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(root, "packages", "shared", "api.ts"), "export const api = 1;");
+  writeFileSync(join(root, ".github", "workflows", "tests.yml"), "name: checks");
+  const cache = new ScopedBaselineCache();
+  const additionalPaths = ["packages/shared/api.ts", ".github/workflows/tests.yml"];
+  const input = { root, scope: "apps/web", additionalPaths };
+  const initial = cache.capture(input);
+  assert.equal(initial.cacheable, true);
+  assert.deepEqual(initial.additionalPaths, [".github/workflows/tests.yml", "packages/shared/api.ts"]);
+  assert.ok(initial.evidence.some(item => item.path === ".github/workflows/tests.yml" && item.role === "tooling"));
+  assert.equal(cache.capture({ ...input, additionalPaths: [...additionalPaths].reverse() }).freshness, "MATCHED_SCOPED_EVIDENCE");
+  writeFileSync(join(root, "packages", "shared", "api.ts"), "export const api = 2;");
+  assert.equal(cache.capture(input).freshness, "NEW_OR_INCOMPLETE_EVIDENCE");
+  writeFileSync(join(root, ".github", "workflows", "tests.yml"), "name: review");
+  assert.equal(cache.capture(input).freshness, "NEW_OR_INCOMPLETE_EVIDENCE");
+  assert.throws(() => collectBaselineEvidence({ ...input, additionalPaths: ["../outside.ts"] }), /outside/);
+  assert.throws(() => collectBaselineEvidence({ ...input, additionalPaths: ["apps/web/.env"] }), /Excluded/);
+  assert.throws(() => collectBaselineEvidence({ ...input, additionalPaths: [join(root, "AGENTS.md")] }), /relative/);
+  assert.throws(() => collectBaselineEvidence({ ...input, additionalPaths: Array(25).fill("AGENTS.md") }), /Too many/);
+  symlinkSync(join(root, "packages", "shared", "api.ts"), join(root, "linked.ts"));
+  assert.throws(() => collectBaselineEvidence({ ...input, additionalPaths: ["linked.ts"] }), /symlinked/);
+}));
+
+test("opt-in native Git reads actual linked-worktree revision and separates cache scopes", () => {
+  const parent = realpathSync(mkdtempSync(join(tmpdir(), "erosiano-worktree-")));
+  const repo = join(parent, "repo");
+  const worktree = join(parent, "worktree");
+  const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull, GIT_TERMINAL_PROMPT: "0" };
+  const git = (cwd, ...args) => {
+    const result = spawnSync("git", ["-C", cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + devNull, ...args],
+      { env, encoding: "utf8", timeout: 10000, shell: false });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+
+    return result.stdout.trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(repo, "init", "-q", "-b", "main");
+    writeFileSync(join(repo, "main.ts"), "export const value = 1;");
+    git(repo, "add", "main.ts");
+    git(repo, "commit", "-qm", "initial");
+    const initial = git(repo, "rev-parse", "HEAD");
+    git(repo, "worktree", "add", "-q", "-b", "topic", worktree);
+    assert.equal(collectBaselineEvidence({ root: worktree }).revision.status, "unknown");
+    const cache = new ScopedBaselineCache();
+    const input = { root: worktree, useGit: true };
+    const first = cache.capture(input);
+    assert.deepEqual(first.revision, { status: "observed", head: initial, branch: "refs/heads/topic" });
+    assert.equal(first.revisionSource, "native-git");
+    assert.equal(first.cacheable, true);
+    assert.equal(cache.capture(input).freshness, "MATCHED_SCOPED_EVIDENCE");
+    assert.equal(cache.capture({ root: repo, useGit: true }).freshness, "NEW_OR_INCOMPLETE_EVIDENCE");
+    writeFileSync(join(worktree, "main.ts"), "export const value = 2;");
+    git(worktree, "commit", "-qam", "second");
+    const second = cache.capture(input);
+    assert.notEqual(second.revision.head, initial);
+    assert.equal(second.freshness, "NEW_OR_INCOMPLETE_EVIDENCE");
+  } finally { rmSync(parent, { recursive: true, force: true }); }
+});
