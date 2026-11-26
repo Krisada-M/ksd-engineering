@@ -122,3 +122,18 @@ jobs:
           node plugins/erosiano-dev/test/eval/smoke-omp-adoption.mjs --omp "$OMP_SMOKE_BINARY" \
             --legacy "$GITHUB_WORKSPACE/_host-fixtures/legacy" \
             --ponytail "$GITHUB_WORKSPACE/_host-fixtures/ponytail/pi-extension/index.js"
+
+      - name: Checkout pinned KSD Intelligence
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: Krisada-M/ksd-intelligence
+          ref: 13d5293378d55dde14945e92e18ffb9b9ca6ee90
+          path: _host-fixtures/intelligence
+          persist-credentials: false
+      - name: Real OMP KSD Intelligence MCP and fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C _host-fixtures/intelligence rev-parse HEAD)" = 13d5293378d55dde14945e92e18ffb9b9ca6ee90
+          node plugins/erosiano-dev/test/eval/smoke-omp-intelligence.mjs --omp "$OMP_SMOKE_BINARY" \
+            --ei "$GITHUB_WORKSPACE/_host-fixtures/intelligence/dist/adapters/cli/main.js"
