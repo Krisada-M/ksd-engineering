@@ -11,7 +11,7 @@ const CRITERIA = Object.freeze({
   E09: "integration", E10: "review", E11: "measurement", E12: "integration",
   E13: "live-host", E14: "evaluation", E15: "approval",
 });
-const JOBS = ["unit (ubuntu-latest, 22.13.0)", "unit (ubuntu-latest, 24)", "unit (macos-latest, 22.13.0)", "unit (macos-latest, 24)", "runtime-floor"];
+const JOBS = ["unit (ubuntu-latest, 22.13.0)", "unit (ubuntu-latest, 24)", "unit (macos-latest, 22.13.0)", "unit (macos-latest, 24)", "runtime-floor", "omp-host (ubuntu-latest)", "omp-host (macos-latest)"];
 const UNIT_STEPS = ["Run npm run lint", "Run npm run typecheck", "Run npm run build", "Run npm test", "Run node plugins/erosiano-dev/test/benchmark.mjs"];
 const nonempty = value => typeof value === "string" && value.trim().length > 0;
 
@@ -24,6 +24,8 @@ function exactCI(ci, head) {
     if (!Array.isArray(steps) || !steps.length) return false;
     if (name === "runtime-floor") {
       if (!steps.some(step => step.name === "Import dependency-free extension and companions" && step.conclusion === "success")) return false;
+    } else if (name.startsWith("omp-host (")) {
+      if (!["Download and verify pinned OMP binary", "Real OMP command and migration smoke"].every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) return false;
     } else if (!UNIT_STEPS.every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) {
       return false;
     }
