@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
-import createExtension from "../index.js";
+import createExtension, { parseEngineeringCommand } from "../index.js";
 import { augmentSystemPrompt, buildPolicy, POLICY_MARKER } from "../policy.js";
 import { loadConfig, findProjectRoot } from "../config.js";
 
@@ -139,6 +139,8 @@ test("review only starts on explicit command, one request per trigger, and queue
     assert.match(h.sent[0].message, /Scope: inspect the actual diff/);
     assert.match(h.sent[0].message, /must not be invoked here unless the user separately requested it/);
     assert.match(h.sent[0].message, /SDLC workflow/, "review carries the tier-2 SDLC checklist");
+    assert.match(h.sent[0].message, /Project baseline discovery/);
+    assert.match(h.sent[0].message, /CURRENT, LEGACY, TRANSITIONAL, LOCAL, EXCEPTION or UNKNOWN/);
     assert.match(h.sent[0].message, /Review scope: apps\/web\/features\/auth$/, "operator scope stays last");
     assert.deepEqual(h.sent[0].options, { deliverAs: "followUp" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -312,4 +314,59 @@ test("theme failures and unsupported UI never crash the activity lifecycle", () 
     assert.doesNotThrow(() => h.events.get("agent_end")({}, { cwd: dir, ui: { setStatus() { throw new Error("TUI disconnected"); } } }));
     assert.doesNotThrow(() => h.events.get("session_start")({}, { cwd: dir, ui: {} }));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("baseline subcommand preserves case-sensitive scope and rejects ambiguous prefix", () => {
+  assert.deepEqual(parseEngineeringCommand(" baseline "), { type: "baseline", scope: "" });
+  assert.deepEqual(parseEngineeringCommand(" BASELINE Apps/Web/FeatureA "), { type: "baseline", scope: "Apps/Web/FeatureA" });
+  assert.deepEqual(parseEngineeringCommand("baseline-other"), { type: "invalid" });
+});
+
+test("baseline is explicit, read-only guidance and uses host follow-up delivery", async () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "ksd-baseline-"));
+  try {
+    const event = { systemPromptOptions: { sections: { ponytail: "preserved" } } };
+    h.events.get("before_agent_start")(event, h.ctx(dir));
+    assert.equal(h.sent.length, 0);
+    assert.match(event.systemPromptOptions.sections["engineering-proxy"], /establish a scoped project baseline/);
+    assert.doesNotMatch(event.systemPromptOptions.sections["engineering-proxy"], /Project baseline discovery \(read-only/);
+    assert.equal(event.systemPromptOptions.sections.ponytail, "preserved");
+
+    await h.commands.get("engineering-proxy").handler("baseline Apps/Web", h.ctx(dir, false));
+    assert.equal(h.sent.length, 1);
+    assert.match(h.sent[0].message, /Do not implement changes or execute project checks/);
+    assert.match(h.sent[0].message, /CURRENT, LEGACY, TRANSITIONAL, LOCAL, EXCEPTION or UNKNOWN/);
+    assert.match(h.sent[0].message, /Baseline scope: Apps\/Web$/);
+    assert.deepEqual(h.sent[0].options, { deliverAs: "followUp" });
+
+    await h.commands.get("engineering-proxy").handler("baseline", h.ctx(dir));
+    assert.equal(h.sent.length, 2);
+    assert.match(h.sent[1].message, /Baseline scope: current working directory\.$/);
+    assert.equal(h.sent[1].options, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("disabled or invalid config does not dispatch baseline guidance", async () => {
+  const h = harness();
+  const dir = mkdtempSync(join(tmpdir(), "ksd-baseline-disabled-"));
+  try {
+    mkdirSync(join(dir, ".git"));
+    for (const config of ['{"enabled":false}', "{"]) {
+      writeFileSync(join(dir, ".engineering-proxy.json"), config);
+      await h.commands.get("engineering-proxy").handler("baseline", h.ctx(dir));
+      assert.equal(h.sent.length, 0);
+      assert.match(h.notices.at(-1)[0], /disabled/);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("both modes carry minimal baseline guidance without the full checklist", () => {
+  for (const enforcement of ["balanced", "adaptive"]) {
+    const policy = buildPolicy({ enforcement });
+    assert.match(policy, /Before substantial changes, establish a scoped project baseline/);
+    assert.match(policy, /current, legacy and unknown/);
+    assert.match(policy, /Never copy insecure legacy behavior/);
+    assert.doesNotMatch(policy, /Project baseline discovery \(read-only/);
+  }
 });

@@ -8,6 +8,10 @@
 
 Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
 
+## Unreleased: agent-guided project baseline foundation
+
+This first implementation slice toward erosiano-dev keeps the existing plugin identity and v0.6.0 release metadata. It adds a short scoped-baseline requirement to both per-turn modes, includes detailed baseline discovery guidance in explicit review, and provides `/engineering-proxy baseline [scope]` for an explicit read-only discovery request. Scope text retains its case; a busy agent receives a follow-up. Disabled configuration prevents dispatch. The extension does not perform repository scanning, caching, automatic checks or enforcement itself. Baseline results must be collected by the agent through approved tools, with scoped evidence, confidence and unknowns. The rename, automatic baseline resolver/cache, full practice catalog and live OMP acceptance remain future work; this is not a released v0.7.
+
 ## Ownership boundaries
 
 - **Ponytail** owns YAGNI, removing needless abstractions, and `ponytail-review`.
@@ -56,7 +60,8 @@ All modes remain `balanced` or `adaptive`. The resolution order is **session ove
 | `/engineering-proxy repo adaptive` | Set the current repository's default to adaptive |
 | `/engineering-proxy repo balanced` | Set the current repository's default to balanced |
 | `/engineering-proxy repo reset` | Remove only the repository's `enforcement` field |
-| `/engineering-review [scope]` | Explicit evidence-based engineering review; Ponytail remains optional |
+| `/engineering-proxy baseline [scope]` | Explicit agent-guided read-only baseline discovery (unreleased); no file changes or automatic checks |
+| `/engineering-review [scope]` | Explicit evidence-based engineering review including scoped baseline guidance; Ponytail remains optional |
 
 Global file (automatically created on first global write): `~/.omp/agent/engineering-proxy.json`.
 
@@ -97,8 +102,8 @@ Per-repository `{ "enabled": false }` or `ENGINEERING_PROXY_DISABLED=1` clears t
 
 The policy is split in two tiers so the per-turn prompt stays small:
 
-- **Every turn** (system prompt, ~430 tokens): the KSD personal style profile (guard clauses, no nested ternaries, result-vs-throw error split, strict types, helper extraction, why-only comments, blank-line rules), the risky-behavior escalation checks, and "never claim an unexecuted check passed".
-- **`/engineering-review` only**: the full Requirements → Design → Implementation → Verification → Delivery SDLC checklist, appended to the review instructions in the effective mode.
+- **Every turn** (system prompt, previously ~430 tokens in v0.6.0; new footprint not yet measured): the KSD personal style profile (guard clauses, no nested ternaries, result-vs-throw error split, strict types, helper extraction, why-only comments, blank-line rules), the risky-behavior escalation checks, and "never claim an unexecuted check passed".
+- **Explicit requests only**: `/engineering-proxy baseline [scope]` delegates read-only baseline discovery; `/engineering-review` includes detailed baseline guidance and the full Requirements → Design → Implementation → Verification → Delivery SDLC checklist in the effective mode.
 
 The checks are **risk-scaled**, not a rigid documentation ceremony: trivial style changes can use a short scope and focused checks, while security-sensitive authentication, payments, data migrations and concurrency require stronger contract and test evidence.
 

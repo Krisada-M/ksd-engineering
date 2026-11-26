@@ -119,7 +119,7 @@ ${cleanCode}
 - Types: no any, no \`as\` casts (\`as const\` is fine), no non-null \`!\`; narrow with type guards; exported functions declare return types.
 - Extract a helper only when it is reused or its name makes the caller clearer; length alone is not a reason.
 - Comments: one line explaining why; never restate the code.
-- Preserve existing architecture, contracts, validation and accessibility; no unrelated renames or refactors.
+- Before substantial changes, establish a scoped project baseline from instructions, native gates, maintained local code and tests; distinguish current, legacy and unknown, refresh stale evidence. Preserve architecture, contracts, validation and accessibility; no unrelated refactors. Never copy insecure legacy behavior.
 - Ponytail owns YAGNI/simplification and /ponytail-review; do not duplicate or invoke it.
 - Risky behavior (auth/authorization, payments, DB schema/queries/RLS, destructive data operations, secrets, concurrency): prove normal-user denial (cross-tenant, another owner's record, unauthenticated), keep idempotency and replay protection, check constraints, locks, transaction boundaries and migration compatibility. Never run real payments or destructive shared-database checks.
 - Never claim a check passed without running it.
