@@ -1,0 +1,1 @@
+Fix the inventory reservation function so concurrent requests cannot reserve more stock than available. Preserve its boolean result and reject invalid quantities.
