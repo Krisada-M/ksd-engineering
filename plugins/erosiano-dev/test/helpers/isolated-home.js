@@ -10,4 +10,5 @@ process.env.KSD_TEST_HOME = isolatedHome;
 process.env.USERPROFILE = isolatedHome;
 delete process.env.ENGINEERING_PROXY_DISABLED;
 delete process.env.EROSIANO_DEV_DISABLED;
+delete process.env.EROSIANO_DEV_PRACTICE_TOOL;
 process.on("exit", () => rmSync(isolatedHome, { recursive: true, force: true }));

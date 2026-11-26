@@ -41,6 +41,30 @@ The local catalog (`plugins/erosiano-dev/practices.json`) has 138 stable version
 
 Run `node plugins/erosiano-dev/practices.js --context context.json` (or installed `erosiano-practices --context context.json`), or `--group typescript` to inspect one group. Facts are explicit; omitted facets stay UNKNOWN, never PASS. Applicable rules are selected by their predicates. Project preferences suppress only non-required guidance; required/security/gate conflicts are surfaced. Enabled native gates are supplied facts, not proof of lint adoption or execution. The resolver never reads host source, executes checks or changes config. Catalog mechanisms and applicability are reviewable defaults, not universal requirements. The exact mode-specific style semantics remain in the existing policy.
 
+## Optional practice tool and KSD Intelligence integration (unreleased)
+
+Default: no extra agent tool schema, no intelligence dependency. If the owner sets `EROSIANO_DEV_PRACTICE_TOOL=1` before launch, compatible OMP hosts register the read-only `erosiano_resolve_practices` tool. It accepts bounded JSON context and optional group, resolves supplied facts and reports conflicts/unknowns. Oversize output asks for a group rather than silently treating omitted rules as passed. Registration or a mock test is not live-host verification.
+
+The current ksd-intelligence repository (main e2be8fa54b318afd88f2c5312edd2fb6a751c77a) **bundles Engineering Proxy v0.6.0**, including its command aliases. Do not install both OMP extensions. Its legacy disable flag is shared with erosiano-dev and does not reliably separate command registration. Use ksd-intelligence's separately installed local CLI or MCP server instead. Its own repository documents Node >=22.5, runtime setup and first-query local indexing; review these prerequisites before approving any provider commands. No changes were made to that repository.
+
+Set `"intelligenceMode": "mcp"` in the selected erosiano-dev config only after approving a local server named `ksd-intelligence` fixed to the intended absolute root, or use `"cli"` for agent-guided approved ei commands. Default is off; invalid/absent/partial capability is reported, never force-enabled. Example OMP project MCP definition (manual, illustrative; verify your actual executable and root):
+
+```json
+{
+  "mcpServers": {
+    "ksd-intelligence": {
+      "type": "stdio",
+      "command": "/absolute/path/to/ei",
+      "args": ["mcp", "--root", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+The bridge checks the documented OMP active MCP names `mcp__ksd_intelligence_ei_status/search/impact/changes` (each suffix is a separate name), not fuzzy names or installed-but-inactive tools. Advertised names do not authenticate origin/version/root, freshness or coverage. Explicit baseline/practices/review guidance references the actual documented input contracts; the agent must call only via permitted tools and compare affected callers/tests with native evidence. CLI mode does not probe or execute the binary. Incomplete/stale/unavailable results fall back to source inspection. No automatically launched subprocess, setup, index, tool activation, file mutation or remote call.
+
+Source contracts inspected: [KSD tools](https://github.com/Krisada-M/ksd-intelligence/blob/e2be8fa54b318afd88f2c5312edd2fb6a751c77a/docs/TOOLS.md), [bundled OMP adapter](https://github.com/Krisada-M/ksd-intelligence/blob/e2be8fa54b318afd88f2c5312edd2fb6a751c77a/src/adapters/omp/extension.ts), [OMP extensions](https://github.com/can1357/oh-my-pi/blob/main/docs/extensions.md), [OMP MCP config](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md), [MCP name bridge](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-server-tool-authoring.md). Live OMP + MCP and tool registration matrix remains NOT VERIFIED.
+
 ## Ownership boundaries
 
 - **Ponytail** owns YAGNI, removing needless abstractions, and `ponytail-review`.
