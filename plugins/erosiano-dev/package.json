@@ -12,7 +12,8 @@
   },
   "bin": {
     "ksd-check-changed": "./check-changed.js",
-    "ksd-review-verdict": "./review-verdict.js"
+    "ksd-review-verdict": "./review-verdict.js",
+    "erosiano-practices": "./practices.js"
   },
   "engines": {
     "node": ">=20"
