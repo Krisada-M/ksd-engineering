@@ -1,6 +1,6 @@
 # Engineering Proxy v0.6.0 — Acceptance & evidence
 
-Evidence names below are test titles in `plugins/engineering-proxy/test/`. CI runs them on Ubuntu and macOS with Node 22.13 and 24.
+Historical v0.6.0 acceptance record; paths and identifiers refer to that release. Tests move to `plugins/erosiano-dev/test/` for the v0.7 candidate; new release acceptance must be recorded separately. CI runs them on Ubuntu and macOS with Node 22.13 and 24.
 
 ## Implemented and unit-testable
 

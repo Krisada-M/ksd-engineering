@@ -8,9 +8,9 @@
   },
   "scripts": {
     "lint": "eslint --config eslint.config.mjs .",
-    "typecheck": "tsc --noEmit -p plugins/engineering-proxy/tsconfig.json",
-    "build": "tsc -p plugins/engineering-proxy/tsconfig.json",
-    "test": "node --import ./plugins/engineering-proxy/test/helpers/isolated-home.js --test plugins/engineering-proxy/test/*.test.js"
+    "typecheck": "tsc --noEmit -p plugins/erosiano-dev/tsconfig.json",
+    "build": "tsc -p plugins/erosiano-dev/tsconfig.json",
+    "test": "node --import ./plugins/erosiano-dev/test/helpers/isolated-home.js --test plugins/erosiano-dev/test/*.test.js"
   },
   "devDependencies": {
     "eslint": "10.13.0",
