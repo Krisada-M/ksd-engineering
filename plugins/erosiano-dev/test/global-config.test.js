@@ -10,7 +10,7 @@ async function fixture(fn) {
   const dir = mkdtempSync(join(tmpdir(), "ksd-global-"));
   const repo = join(dir, "repo");
   mkdirSync(join(repo, ".git"), { recursive: true });
-  const globalConfigPath = join(dir, ".omp", "agent", "engineering-proxy.json");
+  const globalConfigPath = join(dir, ".omp", "agent", "erosiano-dev.json");
   const options = { globalConfigPath };
   try {
     await fn({ dir, repo, globalConfigPath, options });
@@ -42,7 +42,7 @@ function rig(globalConfigPath) {
     },
   });
 
-  const command = (args, context) => commands.get("engineering-proxy").handler(args, context);
+  const command = (args, context) => commands.get("erosiano-dev").handler(args, context);
 
   return { events, commands, entries, notices, statuses, ctx, command };
 }
@@ -72,16 +72,16 @@ test("project > global > default and resets restore inheritance", () => fixture(
 }));
 
 test("scoped writes preserve enabled and unrelated keys without changing other scope", () => fixture(({ repo, globalConfigPath, options }) => {
-  writeFileSync(join(repo, ".engineering-proxy.json"), '{"enabled":false,"custom":"kept"}\n');
+  writeFileSync(join(repo, ".erosiano-dev.json"), '{"enabled":false,"custom":"kept"}\n');
   setScopedMode(repo, "global", "adaptive", options);
-  assert.equal(readFileSync(join(repo, ".engineering-proxy.json"), "utf8"), '{"enabled":false,"custom":"kept"}\n');
+  assert.equal(readFileSync(join(repo, ".erosiano-dev.json"), "utf8"), '{"enabled":false,"custom":"kept"}\n');
   setScopedMode(repo, "repo", "balanced", options);
-  assert.deepEqual(JSON.parse(readFileSync(join(repo, ".engineering-proxy.json"), "utf8")), {
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, ".erosiano-dev.json"), "utf8")), {
     enabled: false, custom: "kept", enforcement: "balanced",
   });
   assert.equal(loadConfig(repo, options).enabled, false);
   setScopedMode(repo, "repo", null, options);
-  assert.deepEqual(JSON.parse(readFileSync(join(repo, ".engineering-proxy.json"), "utf8")), { enabled: false, custom: "kept" });
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, ".erosiano-dev.json"), "utf8")), { enabled: false, custom: "kept" });
   assert.equal(JSON.parse(readFileSync(globalConfigPath, "utf8")).enforcement, "adaptive");
 }));
 
@@ -99,24 +99,24 @@ test("session > project > global and reset tombstone survives session switch", (
   const ctx = h.ctx(repo);
   await h.command("global adaptive", ctx);
   h.events.get("session_start")({}, ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
   await h.command("repo balanced", ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
   await h.command("adaptive", ctx);
   await h.command("global balanced", ctx);
   await h.command("repo balanced", ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
   await h.command("reset", ctx);
   assert.deepEqual(h.entries.at(-1).data, { reset: true });
   h.events.get("session_switch")({}, ctx);
   assert.equal(resolveSessionMode(h.entries, "balanced"), "balanced");
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: BALANCED"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: BALANCED"]);
   await h.command("repo reset", ctx);
   await h.command("global adaptive", ctx);
-  assert.deepEqual(h.statuses.at(-1), ["engineering-proxy", "○ 🛡 KSD: ADAPTIVE"]);
+  assert.deepEqual(h.statuses.at(-1), ["erosiano-dev", "○ 🛡 EROSIANO: ADAPTIVE"]);
   const event = { systemPromptOptions: { sections: { ponytail: "full" } } };
   h.events.get("before_agent_start")(event, ctx);
-  assert.match(event.systemPromptOptions.sections["engineering-proxy"], /Adaptive Clean Code/);
+  assert.match(event.systemPromptOptions.sections["erosiano-dev"], /Adaptive Clean Code/);
   assert.equal(event.systemPromptOptions.sections.ponytail, "full");
   await h.command("status", ctx);
   assert.match(h.notices.at(-1)[0], /ADAPTIVE \(global\)/);
@@ -126,7 +126,7 @@ test("global enabled=false is overridable by repo, but invalid global fails clos
   mkdirSync(join(globalConfigPath, ".."), { recursive: true });
   writeFileSync(globalConfigPath, '{"enabled":false,"enforcement":"adaptive"}');
   assert.equal(loadConfig(repo, options).enabled, false);
-  writeFileSync(join(repo, ".engineering-proxy.json"), '{"enabled":true}');
+  writeFileSync(join(repo, ".erosiano-dev.json"), '{"enabled":true}');
   assert.equal(loadConfig(repo, options).enabled, true);
   assert.equal(loadConfig(repo, options).enforcement, "adaptive");
   writeFileSync(globalConfigPath, '{"enabled":"wrong"}');
@@ -144,4 +144,34 @@ test("global mode applies to two repositories without cross-repo leakage", () =>
   setScopedMode(other, "repo", "balanced", options);
   assert.equal(loadConfig(repo, options).enforcement, "adaptive");
   assert.equal(loadConfig(other, options).enforcement, "balanced");
+}));
+
+test("legacy project config is read without mutation and reset migrates without resurrection", () => fixture(({ repo, options }) => {
+  const legacy = join(repo, ".engineering-proxy.json");
+  const canonical = join(repo, ".erosiano-dev.json");
+  const original = '{"enabled":true,"enforcement":"adaptive","custom":"retained"}';
+  writeFileSync(legacy, original);
+  assert.equal(loadConfig(repo, options).enforcement, "adaptive");
+  assert.equal(loadConfig(repo, options).projectConfigSource, legacy);
+  assert.throws(() => readFileSync(canonical), /ENOENT/);
+  setScopedMode(repo, "repo", null, options);
+  assert.equal(readFileSync(legacy, "utf8"), original);
+  assert.deepEqual(JSON.parse(readFileSync(canonical, "utf8")), { enabled: true, custom: "retained" });
+  assert.equal(loadConfig(repo, options).enforcement, "balanced");
+  assert.match(loadConfig(repo, options).configWarnings[0], /authoritative/);
+}));
+
+test("canonical global config wins over legacy, even when invalid", () => fixture(({ repo, globalConfigPath, options }) => {
+  mkdirSync(join(globalConfigPath, ".."), { recursive: true });
+  const legacy = join(globalConfigPath, "..", "engineering-proxy.json");
+  writeFileSync(legacy, '{"enforcement":"adaptive","custom":"keep"}');
+  assert.equal(loadConfig(repo, options).enforcement, "adaptive");
+  setScopedMode(repo, "global", "balanced", options);
+  assert.deepEqual(JSON.parse(readFileSync(globalConfigPath, "utf8")), { enforcement: "balanced", custom: "keep" });
+  assert.equal(loadConfig(repo, options).enforcement, "balanced");
+  writeFileSync(globalConfigPath, "{invalid");
+  assert.equal(loadConfig(repo, options).enabled, false);
+  assert.match(loadConfig(repo, options).configWarnings[0], /different or invalid/);
+  assert.throws(() => setScopedMode(repo, "global", "adaptive", options), /Cannot parse/);
+  assert.equal(readFileSync(globalConfigPath, "utf8"), "{invalid");
 }));

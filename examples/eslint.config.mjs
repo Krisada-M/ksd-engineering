@@ -2,7 +2,7 @@
 // The KSD style profile as blocking errors, suited to lint-staged. The TypeScript block needs
 // typescript-eslint installed in the host; plain JavaScript repositories can drop it.
 import tseslint from "typescript-eslint";
-import engineeringProxy from "omp-engineering-proxy/eslint";
+import engineeringProxy from "omp-erosiano-dev/eslint";
 
 export default [
   {

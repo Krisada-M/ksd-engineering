@@ -3,13 +3,14 @@ import { buildSdlcPolicy } from "./sdlc.js";
 import { augmentSystemPrompt, buildPolicy, SECTION_KEY } from "./policy.js";
 import { KsdRuntime } from "./dist/runtime.js";
 
-const MODE_ENTRY = "engineering-proxy-mode";
-const isDisabledByEnv = () => process.env.ENGINEERING_PROXY_DISABLED === "1";
+const MODE_ENTRY = "erosiano-dev-mode";
+const LEGACY_MODE_ENTRY = "engineering-proxy-mode";
+const isDisabledByEnv = () => process.env.EROSIANO_DEV_DISABLED === "1" || process.env.ENGINEERING_PROXY_DISABLED === "1";
 
 export function parseEngineeringCommand(input) {
   const text = String(input ?? "").trim();
-  const baseline = /^baseline(?:\s+([\s\S]+))?$/i.exec(text);
-  if (baseline) return { type: "baseline", scope: baseline[1]?.trim() ?? "" };
+  const scoped = /^(baseline|review)(?:\s+([\s\S]+))?$/i.exec(text);
+  if (scoped) return { type: scoped[1].toLowerCase(), scope: scoped[2]?.trim() ?? "" };
 
   const words = text.toLowerCase().split(/\s+/);
   if (words.length === 1) {
@@ -30,7 +31,7 @@ function sessionOverride(entries) {
 
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
-    if (entry?.type !== "custom" || entry?.customType !== MODE_ENTRY) continue;
+    if (entry?.type !== "custom" || ![MODE_ENTRY, LEGACY_MODE_ENTRY].includes(entry.customType)) continue;
     if (entry.data?.reset === true) return null;
     if (SUPPORTED_MODES.includes(entry.data?.mode)) return entry.data.mode;
   }
@@ -62,18 +63,30 @@ function requestAgent(pi, ctx, message) {
   pi.sendUserMessage(message);
 }
 
-const REVIEW_INSTRUCTIONS = `Review the current requested change as Engineering Proxy. This delegation does not run any review code for you: perform the inspection yourself through your permitted tools, following OMP permissions and approvals.
+const REVIEW_INSTRUCTIONS = `Review the current requested change as erosiano-dev. This delegation does not run any review code for you: perform the inspection yourself through your permitted tools, following OMP permissions and approvals.
 
 1. Requirements: state the acceptance criteria and what the change must not break. Check requirements, relevant callers and contracts.
 2. Scope: inspect the actual diff of tracked changes against the operator's stated base (or HEAD for worktree review), plus intended untracked files (NUL-safe discovery, \`git diff --no-index --no-ext-diff --no-textconv -U0 -- /dev/null <path>\`; exit 1 means differences), deletions and renames. Never stage user files to manufacture scope. A path keyword is a hint, not proof that other files are low risk.
 3. Checks: discover the repository's existing check commands first and inspect their safety; declare the applicable required and critical gates, then select typecheck/lint/tests/runtime/CI checks and execute only through permitted tools. Record exact cwd, exit code, output and pass/fail/skip counts. Missing or denied commands and credentials are NOT_RUN or BLOCKED. Never run migrations, database resets or real payments in shared environments.
 4. Evidence: a skipped test without required environment is NOT_RUN, not PASS. A CI YAML file is not proof its job exercised the change; inspect actual relevant job and step execution for the reviewed commit and distinguish dirty/untracked behavior it cannot cover. Source-only inspection cannot verify an executed gate. Optional installed ksd-check-changed and ksd-review-verdict validators may be invoked through approved OMP tools with supplied reports and required gates; they do not run checks or authenticate evidence. A tiny review needs no report file: report the observed evidence directly.
 5. Risk: escalate Auth, Payments, Database/schema/query changes, RLS/authorization, destructive data operations, secrets and concurrency based on behavior, not filenames. For auth check normal-user denial (cross-tenant, another owner's record, unauthenticated; service-role success is not isolation proof). For payments preserve confirmation, idempotency and replay protection. For databases check constraints, locks, transaction boundaries and migration compatibility. For deletions check scope, cascades and recovery.
-6. Style: independently verify the KSD style profile from the Engineering Proxy policy (guard clauses, no nested ternaries, result-vs-throw error split, strict types, why-only comments, blank-line rules), repo conventions and type safety. Review changed scope, not unrelated code.
+6. Style: independently verify the KSD style profile from the erosiano-dev policy (guard clauses, no nested ternaries, result-vs-throw error split, strict types, why-only comments, blank-line rules), repo conventions and type safety. Review changed scope, not unrelated code.
 Report: acceptance criteria, affected contracts/risk, findings anchored to files with severity, exact observed check evidence (commands and results), and missing/denied/skipped/failed checks — then delivery and rollback implications. Never label release or merge readiness with unresolved required or security gates; no auto release/merge/push/deploy. Ponytail review must not be invoked here unless the user separately requested it; do not report a pass you did not observe.`;
 
 export function createExtension(pi, { globalConfigPath } = {}) {
-  pi.setLabel?.("Engineering Proxy");
+  pi.setLabel?.("erosiano-dev");
+  // The old extension cannot coordinate with this one. Never register over detected legacy commands.
+  let existingCommands;
+  try {
+    existingCommands = pi.getCommands?.();
+  } catch {
+    // Detection is best-effort; operators must still disable the old extension before activation.
+  }
+  if (Array.isArray(existingCommands) && existingCommands.some(command => ["engineering-proxy", "engineering-review", "erosiano-dev"].includes(command?.name))) {
+    pi.on("session_start", (_event, ctx) => ctx?.ui?.notify?.("erosiano-dev not activated: engineering commands already registered. Disable the previous plugin and restart.", "warning"));
+
+    return;
+  }
   // One runtime per extension instance: caches must not leak between hosts or tests.
   const runtime = new KsdRuntime(cwd => loadConfig(cwd, { globalConfigPath }), buildPolicy, isDisabledByEnv);
 
@@ -162,8 +175,8 @@ export function createExtension(pi, { globalConfigPath } = {}) {
     return result;
   });
 
-  pi.registerCommand("engineering-proxy", {
-    description: "Engineering policy: status, session mode/reset, global mode/reset, repo mode/reset, baseline [scope]",
+  const engineeringCommand = {
+    description: "Engineering policy: status, session mode/reset, global mode/reset, repo mode/reset, baseline [scope], review [scope]",
     handler: async (args, ctx) => {
       // Refresh and draw status BEFORE any validation or disabled early return, so a rejected
       // command cannot leave stale status behind.
@@ -173,14 +186,20 @@ export function createExtension(pi, { globalConfigPath } = {}) {
       const enabled = config.enabled && !isDisabledByEnv();
 
       if (parsed.type === "invalid") {
-        ctx.ui?.notify?.("Usage: /engineering-proxy [status|balanced|adaptive|reset|global <balanced|adaptive|reset>|repo <balanced|adaptive|reset>|baseline [scope]]", "warning");
+        ctx.ui?.notify?.("Usage: /erosiano-dev [status|balanced|adaptive|reset|global <balanced|adaptive|reset>|repo <balanced|adaptive|reset>|baseline [scope]|review [scope]]", "warning");
+
+        return;
+      }
+
+      if (parsed.type === "review") {
+        await reviewCommand.handler(parsed.scope, ctx);
 
         return;
       }
 
       if (parsed.type === "baseline") {
         if (!enabled) {
-          ctx.ui?.notify?.("Engineering Proxy is disabled for this project", "warning");
+          ctx.ui?.notify?.("erosiano-dev is disabled for this project", "warning");
 
           return;
         }
@@ -194,7 +213,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
       if (parsed.type === "set-mode" || parsed.type === "reset-session") {
         if (!enabled && parsed.type === "set-mode") {
-          ctx.ui?.notify?.("Engineering Proxy is disabled; mode unchanged.", "warning");
+          ctx.ui?.notify?.("erosiano-dev is disabled; mode unchanged.", "warning");
 
           return;
         }
@@ -212,7 +231,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
         updateStatus(ctx, config, lastWarning ?? undefined);
         const effective = effectiveMode(config);
-        ctx.ui?.notify?.(`KSD mode: ${effective.toUpperCase()} (${persisted ? "saved in session" : "runtime only; session persistence unavailable"})`, persisted ? "info" : "warning");
+        ctx.ui?.notify?.(`EROSIANO mode: ${effective.toUpperCase()} (${persisted ? "saved in session" : "runtime only; session persistence unavailable"})`, persisted ? "info" : "warning");
 
         return;
       }
@@ -223,9 +242,9 @@ export function createExtension(pi, { globalConfigPath } = {}) {
           const path = setScopedMode(ctx.cwd, parsed.scope, mode, { globalConfigPath });
           const next = refreshConfig(ctx);
           updateStatus(ctx, next, lastWarning ?? undefined);
-          ctx.ui?.notify?.(`KSD ${parsed.scope} ${mode ?? "reset"} saved to ${path}; effective: ${effectiveMode(next).toUpperCase()} (${selectedSessionMode ? "session" : next.enforcementSource})`, "info");
+          ctx.ui?.notify?.(`EROSIANO ${parsed.scope} ${mode ?? "reset"} saved to ${path}; effective: ${effectiveMode(next).toUpperCase()} (${selectedSessionMode ? "session" : next.enforcementSource})`, "info");
         } catch (error) {
-          ctx.ui?.notify?.(`KSD ${parsed.scope} update failed: ${error.message}`, "warning");
+          ctx.ui?.notify?.(`EROSIANO ${parsed.scope} update failed: ${error.message}`, "warning");
         }
 
         return;
@@ -233,19 +252,19 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
       const names = pi.getCommands?.() ?? [];
       const ponytailFound = Array.isArray(names) && names.some(command => command?.name === "ponytail");
-      const msg = `Engineering Proxy: ${enabled ? "ON" : "OFF"}; mode: ${effectiveMode(config).toUpperCase()} (${selectedSessionMode ? "session" : config.enforcementSource}); project default: ${(config.projectEnforcement ?? "unset").toUpperCase()}; global default: ${(config.globalEnforcement ?? "unset").toUpperCase()}; session: ${(selectedSessionMode ?? "inherit").toUpperCase()}; Ponytail command: ${ponytailFound ? "detected" : "not detected/unknown"}; Ponytail mode: not inspected`;
-      const warnings = [config.configError, lastWarning].filter(Boolean);
+      const msg = `erosiano-dev: ${enabled ? "ON" : "OFF"}; mode: ${effectiveMode(config).toUpperCase()} (${selectedSessionMode ? "session" : config.enforcementSource}); project default: ${(config.projectEnforcement ?? "unset").toUpperCase()}; global default: ${(config.globalEnforcement ?? "unset").toUpperCase()}; session: ${(selectedSessionMode ?? "inherit").toUpperCase()}; Ponytail command: ${ponytailFound ? "detected" : "not detected/unknown"}; Ponytail mode: not inspected`;
+      const warnings = [config.configError, ...config.configWarnings, lastWarning].filter(Boolean);
       ctx.ui?.notify?.(warnings.length ? `${msg}; WARNING: ${warnings.join("; ")}` : msg, warnings.length ? "warning" : "info");
     },
-  });
+  };
 
-  pi.registerCommand("engineering-review", {
+  const reviewCommand = {
     description: "Request a scoped, evidence-based engineering review (Ponytail optional)",
     handler: async (args, ctx) => {
       const config = refreshConfig(ctx);
       updateStatus(ctx, config, lastWarning ?? undefined);
       if (!config.enabled || isDisabledByEnv()) {
-        ctx.ui?.notify?.("Engineering Proxy is disabled for this project", "warning");
+        ctx.ui?.notify?.("erosiano-dev is disabled for this project", "warning");
 
         return;
       }
@@ -254,7 +273,11 @@ export function createExtension(pi, { globalConfigPath } = {}) {
       // Explicit operator command only: no automatic Ponytail invocation.
       requestAgent(pi, ctx, message);
     },
-  });
+  };
+
+  pi.registerCommand("erosiano-dev", engineeringCommand);
+  pi.registerCommand("engineering-proxy", engineeringCommand);
+  pi.registerCommand("engineering-review", reviewCommand);
 }
 
 export default createExtension;
