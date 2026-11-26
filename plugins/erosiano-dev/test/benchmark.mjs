@@ -1,22 +1,46 @@
 // In-process measurements of the actual extension hooks, not live OMP or model latency.
-// The same harness can be copied to the baseline checkout for like-for-like comparison.
+// Use the same harness for the current extension and a trusted pinned legacy checkout.
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { createExtension } from "../index.js";
-import { KsdRuntime } from "../dist/runtime.js";
+const args = process.argv.slice(2);
+const options = new Map();
+for (let i = 0; i < args.length; i++) {
+  const flag = args[i];
+  if (options.has(flag) || !["--plugin-root", "--omp", "--json", "--require-tokenizer"].includes(flag)) throw new Error("Invalid benchmark argument");
+  if (flag === "--json" || flag === "--require-tokenizer") {
+    options.set(flag, true);
+    continue;
+  }
+  const path = args[++i];
+  if (!path || !isAbsolute(path)) throw new Error("Benchmark paths must be absolute");
+  options.set(flag, realpathSync(path));
+}
+const root = options.get("--plugin-root") ?? fileURLToPath(new URL("../", import.meta.url));
+const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const identity = metadata.name === "omp-engineering-proxy" ? "engineering-proxy" : "erosiano-dev";
+assert.ok(["omp-engineering-proxy", "omp-erosiano-dev"].includes(metadata.name), "Unexpected trusted plugin package");
+const { createExtension } = await import(pathToFileURL(join(root, "index.js")).href);
+const { KsdRuntime } = await import(pathToFileURL(join(root, "dist/runtime.js")).href);
+const report = { schemaVersion: 1, package: metadata.name, version: metadata.version, node: process.version, platform: process.platform, arch: process.arch, workloads: {}, policy: {} };
+
+function log(message) {
+  if (!options.has("--json")) process.stdout.write(message);
+}
 
 const EVENTS_PER_BATCH = 200;
 const WARMUP_BATCHES = 3;
 const SAMPLE_BATCHES = 12;
 const dir = mkdtempSync(join(tmpdir(), "ksd-ts-bench-"));
 const cwd = join(dir, "project");
-const globalConfigPath = join(dir, "global", "erosiano-dev.json");
-const projectConfigPath = join(cwd, ".erosiano-dev.json");
-const previousDisabled = process.env.EROSIANO_DEV_DISABLED;
+const globalConfigPath = join(dir, "global", identity + ".json");
+const projectConfigPath = join(cwd, "." + identity + ".json");
+const flags = ["EROSIANO_DEV_DISABLED", "ENGINEERING_PROXY_DISABLED", "EROSIANO_DEV_PRACTICE_TOOL"];
+const previousFlags = new Map(flags.map(flag => [flag, process.env[flag]]));
 const originalGetConfig = KsdRuntime.prototype.getConfig;
 const instrumented = new WeakSet();
 let activeCounts;
@@ -54,7 +78,7 @@ try {
   mkdirSync(join(dir, "global"), { recursive: true });
   writeFileSync(globalConfigPath, '{"enabled":true,"enforcement":"balanced"}');
   writeFileSync(projectConfigPath, '{"enabled":true,"enforcement":"balanced"}');
-  process.env.EROSIANO_DEV_DISABLED = "0";
+  for (const flag of flags) process.env[flag] = "0";
 
   function harness() {
     const events = new Map();
@@ -71,7 +95,7 @@ try {
         setStatus() { if (activeCounts) activeCounts.statusWrites++; },
       },
       sessionManager: {
-        getBranch: () => [{ type: "custom", customType: "erosiano-dev-mode", data: { mode } }],
+        getBranch: () => [{ type: "custom", customType: identity + "-mode", data: { mode } }],
       },
     };
     const prompt = { systemPromptOptions: { sections: {} } };
@@ -91,10 +115,10 @@ try {
   // Read exactly what the real hook places into the host's structured prompt.
   const policyHarness = harness();
   policyHarness.turn();
-  const emitted = { balanced: policyHarness.prompt.systemPromptOptions.sections["erosiano-dev"] };
+  const emitted = { balanced: policyHarness.prompt.systemPromptOptions.sections[identity] };
   policyHarness.switchMode();
   policyHarness.turn();
-  emitted.adaptive = policyHarness.prompt.systemPromptOptions.sections["erosiano-dev"];
+  emitted.adaptive = policyHarness.prompt.systemPromptOptions.sections[identity];
   assert.equal(typeof emitted.balanced, "string");
   assert.equal(typeof emitted.adaptive, "string");
   assert.notEqual(emitted.balanced, emitted.adaptive);
@@ -158,33 +182,46 @@ try {
     return value;
   }
 
-  process.stdout.write(`Batch size=${EVENTS_PER_BATCH}; warmup batches/workload=${WARMUP_BATCHES}; sample batches/workload=${SAMPLE_BATCHES}; order rotated and reversed.\n`);
+  report.eventsPerBatch = EVENTS_PER_BATCH;
+  report.warmupBatches = WARMUP_BATCHES;
+  report.sampleBatches = SAMPLE_BATCHES;
+  log(`Batch size=${EVENTS_PER_BATCH}; warmup batches/workload=${WARMUP_BATCHES}; sample batches/workload=${SAMPLE_BATCHES}; order rotated and reversed.\n`);
   for (const workload of workloads) {
     const p50 = percentile(workload.samples, 0.5);
     const p95 = percentile(workload.samples, 0.95);
     const { loaders, builds, statusWrites } = workload.counts;
-    process.stdout.write(`${workload.name}: batch p50=${p50.toFixed(3)} ms p95=${p95.toFixed(3)} ms; p50=${(p50 * 1000 / EVENTS_PER_BATCH).toFixed(3)} µs/event p95=${(p95 * 1000 / EVENTS_PER_BATCH).toFixed(3)} µs/event; measured loader calls=${loaders}, policy builds=${builds}, status writes=${statusWrites}\n`);
+    report.workloads[workload.name] = { p50Us: p50 * 1000 / EVENTS_PER_BATCH, p95Us: p95 * 1000 / EVENTS_PER_BATCH, loaders, builds, statusWrites };
+    log(`${workload.name}: batch p50=${p50.toFixed(3)} ms p95=${p95.toFixed(3)} ms; p50=${(p50 * 1000 / EVENTS_PER_BATCH).toFixed(3)} µs/event p95=${(p95 * 1000 / EVENTS_PER_BATCH).toFixed(3)} µs/event; measured loader calls=${loaders}, policy builds=${builds}, status writes=${statusWrites}\n`);
   }
 
   for (const [mode, policy] of Object.entries(emitted)) {
     const file = join(dir, `policy-${mode}.txt`);
     writeFileSync(file, policy);
-    process.stdout.write(`Emitted ${mode} policy: ${Buffer.byteLength(policy, "utf8")} UTF-8 bytes\n`);
-    const run = spawnSync("omp", ["toks", file, "--json"], { encoding: "utf8", timeout: 15000 });
+    const bytes = Buffer.byteLength(policy, "utf8");
+    assert.ok(!policy.includes("Project baseline discovery (read-only") && !policy.includes("SDLC workflow"), "Detailed policy leaked into the per-turn core");
+    report.policy[mode] = { bytes, tokens: null };
+    log(`Emitted ${mode} policy: ${bytes} UTF-8 bytes\n`);
+    const run = spawnSync(options.get("--omp") ?? "omp", ["toks", file, "--json"], { encoding: "utf8", timeout: 15000 });
     try {
       if (run.error || run.status !== 0) throw new Error(run.error?.message ?? `exit ${run.status}`);
       const json = JSON.parse(run.stdout);
       const encoding = json.encodings.find(row => row.name === "o200k_base");
-      if (!encoding || !Number.isFinite(encoding.tokens)) throw new Error("o200k_base count unavailable");
-      process.stdout.write(`Offline tokenizer ${mode}: ${encoding.tokens} o200k_base tokens\n`);
+      if (!encoding || !Number.isSafeInteger(encoding.tokens) || encoding.tokens <= 0 || json.bytes !== bytes || json.source?.kind !== "file") throw new Error("o200k_base count unavailable or wrong input");
+      report.policy[mode].tokens = encoding.tokens;
+      log(`Offline tokenizer ${mode}: ${encoding.tokens} o200k_base tokens\n`);
     } catch (error) {
-      process.stdout.write(`Offline tokenizer ${mode}: unavailable (${error.message})\n`);
+      if (options.has("--require-tokenizer")) throw error;
+      log(`Offline tokenizer ${mode}: unavailable (${error.message})\n`);
     }
   }
-  process.stdout.write("In-process hook timings include instrumentation; they exclude the OMP host, agents and model latency. No live speedup claim.\n");
+  report.scope = "instrumented in-process extension hooks and offline o200k_base tokens; excludes OMP host/model latency";
+  log("In-process hook timings include instrumentation; they exclude the OMP host, agents and model latency. No live speedup claim.\n");
+  if (options.has("--json")) console.log(JSON.stringify(report));
 } finally {
   KsdRuntime.prototype.getConfig = originalGetConfig;
-  if (previousDisabled === undefined) delete process.env.EROSIANO_DEV_DISABLED;
-  else process.env.EROSIANO_DEV_DISABLED = previousDisabled;
+  for (const [flag, previous] of previousFlags) {
+    if (previous === undefined) delete process.env[flag];
+    else process.env[flag] = previous;
+  }
   rmSync(dir, { force: true, recursive: true });
 }

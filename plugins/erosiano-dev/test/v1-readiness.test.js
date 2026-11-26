@@ -16,3 +16,19 @@ test("v1 readiness refuses incomplete gates and wrong heads rather than acceptin
   report.criteria.push(report.criteria[0]);
   assert.equal(assessV1Readiness(report, {}, {}, head).status, "NOT_ASSESSED");
 });
+
+test("v1 readiness rejects a command evidence report from a different commit", () => {
+  const head = "a".repeat(40);
+  const ids = ["typecheck", "lint", "tests", "runtime", "security"];
+  const reviewGates = ids.map(id => ({
+    id, status: "VERIFIED", evidence: { type: "command", command: "synthetic-test", cwd: "/fixture",
+      result: "synthetic only", exitCode: 0, headSha: head, ...(id === "tests" ? { testCounts: { passed: 1, failed: 0, skipped: 0 } } : {}) },
+  }));
+  reviewGates.push({ id: "ci-parity", status: "VERIFIED", evidence: { type: "ci-run", url: "https://example.invalid/run", conclusion: "success", headSha: head } });
+  const report = { schemaVersion: 1, candidateCommit: head, criteria: [], reviewGates };
+  assert.equal(assessV1Readiness(report, {}, {}, head).reviewVerdict, "RELEASE_CANDIDATE");
+  reviewGates[0].evidence.headSha = "b".repeat(40);
+  assert.equal(assessV1Readiness(report, {}, {}, head).reviewVerdict, "NO_GO");
+  delete reviewGates[0].evidence.headSha;
+  assert.equal(assessV1Readiness(report, {}, {}, head).reviewVerdict, "NO_GO");
+});
