@@ -88,12 +88,13 @@ function validateContext(input, catalog) {
 /** Decisions describe supplied evidence, not an authenticated repository scan or executed gate. */
 export function resolvePractices(input, catalog = readPracticeCatalog()) {
   const { overrides, gates } = validateContext(input, catalog);
+  const mode = input.mode ?? "balanced";
   const decisions = catalog.practices.map(rule => {
     const status = applicability(rule, input.facets);
     const override = Object.hasOwn(overrides, rule.id) ? overrides[rule.id] : undefined;
     const nativeGate = gates.has(rule.id) && rule.mechanisms.includes("optional-native-gate");
-    const decision = { id: rule.id, title: rule.title, group: rule.group, intent: rule.intent, status, level: rule.defaultLevel,
-      mechanisms: rule.mechanisms, reason: "Applicable to supplied task facets" };
+    const decision = { id: rule.id, version: rule.version, title: rule.title, group: rule.group, intent: rule.intent, status, level: rule.defaultLevel,
+      mechanisms: rule.mechanisms, safetyInvariant: rule.safetyInvariant === true, reason: "Applicable to supplied task facets" };
     if (status !== "APPLICABLE") {
       if (override?.disposition === "required" || nativeGate) {
         return { ...decision, status: "CONFLICT", level: "REQUIRED", reason: "Explicit project gate conflicts with missing or negative applicability; resolve with evidence", project: override };
@@ -112,10 +113,15 @@ export function resolvePractices(input, catalog = readPracticeCatalog()) {
       return { ...decision, level: "REQUIRED", reason: "Explicitly supplied project rule or opted-in native gate", project: override };
     }
 
+    if (rule.id === "S01") {
+      return { ...decision, level: mode === "balanced" ? "ADVISORY" : "PREFERRED",
+        reviewDisposition: mode === "adaptive" ? "FIX_REQUIRED_IF_BEHAVIOR_PRESERVING" : "ADVISORY" };
+    }
+
     return decision;
   });
 
-  return { schemaVersion: 1, mode: input.mode ?? "balanced", evidence: "SUPPLIED_NOT_AUTHENTICATED", decisions };
+  return { schemaVersion: 1, mode, evidence: "SUPPLIED_NOT_AUTHENTICATED", decisions };
 }
 
 // A fresh hash binds the supplied interpretation to the sampled bytes, not to the truth of the interpretation.
@@ -174,6 +180,59 @@ export function renderPracticeSelection(result) {
   return [`Practices: ${selected.length} selected/conflicting; ${unknown.length} unresolved. Evidence: ${result.evidence}; semantics not authenticated.`, ...lines, ...(unknown.length ? ["Unknown applicability: " + unknown.join(", ")] : [])].join("\n");
 }
 
+// Compose only from a fresh resolution, not arbitrary user-authored instructions.
+// Never include raw observation reasons or file contents in the pack.
+export function composePracticePack(selection, { group, maxChars = 6000 } = {}) {
+  if (selection?.evidence !== "FRESH_SAMPLED_BYTES_SUPPLIED_SEMANTICS" || !Array.isArray(selection.decisions)) {
+    throw new Error("A policy pack requires a fresh scoped practice selection");
+  }
+  if (!Number.isInteger(maxChars) || maxChars < 1000 || maxChars > 12000) throw new Error("Invalid policy pack limit");
+  if (group !== undefined && !selection.decisions.some(rule => rule.group === group)) throw new Error("Unknown practice group");
+  const all = selection.decisions;
+  const relevant = all.filter(rule => group === undefined || rule.group === group);
+  const conflicts = all.filter(rule => rule.status === "CONFLICT").map(rule => rule.id);
+  const unknownRequired = all.filter(rule => rule.status === "UNKNOWN" && rule.safetyInvariant).map(rule => rule.id);
+  const suppressed = relevant.filter(rule => rule.status === "SUPPRESSED").map(rule => rule.id);
+  const selected = relevant.filter(rule => rule.status === "APPLICABLE");
+  const priority = { REQUIRED: 0, PREFERRED: 1, ADVISORY: 2 };
+  selected.sort((a, b) => priority[a.level] - priority[b.level] || a.id.localeCompare(b.id, "en"));
+  const prefix = [
+    "Scoped erosiano-dev practice pack (not an authoritative project rule or verification).",
+    "Fresh sampled bytes only; interpretations are supplied. Existing contracts, project instructions, security and native gates remain authoritative.",
+    "Review current evidence before changes. Refresh this selection if relevant files, scope or task change.",
+    "Mode: " + selection.mode + "; group: " + (group ?? "all") + "; sampled fingerprint: " + selection.baseline.fingerprint,
+    "Conflicts across all groups: " + (conflicts.join(", ") || "none"),
+    "Unknown safety/required-risk applicability across all groups: " + (unknownRequired.join(", ") || "none"),
+    "Suppressed project preferences in this group: " + (suppressed.join(", ") || "none"),
+    "Resolve conflicts and applicable unknown risks before claiming verification. Do not treat omitted or suppressed preferences as waived native gates.",
+  ].join("\n");
+  const included = [];
+  const omitted = [];
+  const lines = [];
+  // Reserve room for a complete list of omitted IDs even in a dense all-group selection.
+  const budget = maxChars - prefix.length - 1100;
+  let used = 0;
+  for (const rule of selected) {
+    const line = rule.id + " v" + rule.version + " [" + rule.level + "] " + rule.title + ": " + rule.intent;
+    if (used + line.length + 1 > budget) {
+      omitted.push(rule.id);
+      continue;
+    }
+    lines.push(line);
+    included.push(rule.id);
+    used += line.length + 1;
+  }
+  const outside = group !== undefined ? all.filter(rule => rule.group !== group && rule.status === "APPLICABLE").length : 0;
+  const footer = "Omitted applicable IDs due to output bound: " + (omitted.join(", ") || "none") +
+    ". Applicable outside requested group: " + outside + ". Request a narrower group or inspect omitted IDs; no omission is a pass.";
+  const text = [prefix, ...lines, footer].join("\n");
+  if (text.length > maxChars) {
+    return { status: "NARROW_GROUP_REQUIRED", text: "Policy output exceeds bound. Request a group; no selected, conflicting or unknown rule is waived.", included: [], omitted: selected.map(rule => rule.id), conflicts, unknownRequired };
+  }
+
+  return { status: conflicts.length ? "CONFLICT" : omitted.length || outside ? "PARTIAL_PACK" : "PACK", text, included, omitted, conflicts, unknownRequired };
+}
+
 function main(args) {
   if (args.length === 2 && args[0] === "--group") {
     const catalog = readPracticeCatalog();
@@ -183,12 +242,25 @@ function main(args) {
 
     return;
   }
-  const usage = "Usage: erosiano-practices --context context.json [--root project [--git]] | --group group";
-  if (args[0] !== "--context" || ![2, 4, 5].includes(args.length) || (args.length >= 4 && args[2] !== "--root") || (args.length === 5 && args[4] !== "--git")) throw new Error(usage);
+  const usage = "Usage: erosiano-practices --context context.json [--root project [--git]] [--policy [--group group]] | --group group";
+  if (args[0] !== "--context" || !args[1] || args[1].startsWith("--")) throw new Error(usage);
+  const options = {};
+  for (let i = 2; i < args.length; i++) {
+    const flag = args[i];
+    if (flag === "--git" || flag === "--policy") {
+      if (Object.hasOwn(options, flag)) throw new Error(usage);
+      options[flag] = true;
+      continue;
+    }
+    if (!["--root", "--group"].includes(flag) || Object.hasOwn(options, flag) || !args[i + 1] || args[i + 1].startsWith("--")) throw new Error(usage);
+    options[flag] = args[++i];
+  }
+  if ((options["--git"] || options["--policy"]) && !options["--root"]) throw new Error(usage);
+  if (options["--group"] && !options["--policy"]) throw new Error(usage);
   const input = readJson(resolve(args[1]), MAX_CONTEXT_BYTES);
-  if (args.length === 2 && Object.hasOwn(input ?? {}, "baseline")) throw new Error("Fresh context requires an operator-selected --root");
-  const result = args.length >= 4 ? resolveFreshPractices(input, { root: args[3], useGit: args.length === 5 }) : resolvePractices(input);
-  console.log(JSON.stringify(result, null, 2));
+  if (!options["--root"] && Object.hasOwn(input ?? {}, "baseline")) throw new Error("Fresh context requires an operator-selected --root");
+  const result = options["--root"] ? resolveFreshPractices(input, { root: options["--root"], useGit: options["--git"] === true }) : resolvePractices(input);
+  console.log(JSON.stringify(options["--policy"] ? composePracticePack(result, { group: options["--group"] }) : result, null, 2));
 }
 
 function isMainModule() {
