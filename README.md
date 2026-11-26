@@ -184,6 +184,10 @@ Run `ksd-review-verdict --report report.json` after installing the companion pac
 
 This is a **report validator**, not a CI provider connector: supplied evidence is not independently authenticated, a good verdict does not authorize merge or deploy, and reviews must examine actual runtime/test results before marking a gate VERIFIED.
 
+## Optional Type-aware Correctness profile (unreleased)
+
+Compose `examples/eslint.correctness.config.mjs` into a compatible host ESLint flat config only after reviewing its existing parser, native rules, TypeScript projects and framework-specific exceptions. It uses the host's typescript-eslint and projectService for typed promise, unsafe type and exhaustive-switch rules; void alone is not accepted for floating promises. Strict boolean expressions, unused symbols and atomic-update heuristic start as warnings. Core no-unsafe-finally is shared across JS/TS. The optional `examples/tsconfig.correctness.json` provides strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes, noImplicitReturns and noFallthroughCasesInSwitch. Merge or extend these deliberately; do not overwrite project config, switch toolchains or force a brownfield migration. Native gates remain authoritative, lint is not concurrency or runtime proof, and dependencies are not installed by erosiano-dev. The unit suite exercises real TypeScript-aware ESLint and compiler fixtures.
+
 ## Repo-adaptive style enforcement
 
 `before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["erosiano-dev"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.erosiano-dev.json` is optional (see `examples/`), supports `enabled:boolean` and `enforcement: "balanced"|"adaptive"`. The repository default inherits the global config when absent (or balanced if both are absent); explicit session mode commands override both. Existing unrelated settings are untouched.
