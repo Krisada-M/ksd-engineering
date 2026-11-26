@@ -91,3 +91,5 @@ jobs:
       - name: Real OMP command and migration smoke
         shell: bash
         run: node plugins/erosiano-dev/test/eval/smoke-omp.mjs --omp "$OMP_SMOKE_BINARY"
+      - name: Real OMP prompt injection with loopback fixture
+        run: node plugins/erosiano-dev/test/eval/smoke-omp-prompt.mjs --omp "$OMP_SMOKE_BINARY"
