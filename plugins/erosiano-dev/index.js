@@ -4,6 +4,8 @@ import { augmentSystemPrompt, buildPolicy, SECTION_KEY } from "./policy.js";
 import { KsdRuntime } from "./dist/runtime.js";
 import { fileURLToPath } from "node:url";
 import { ScopedBaselineCache, summarizeBaselineEvidence } from "./baseline.js";
+import { intelligenceCapabilities, intelligenceGuidance } from "./intelligence.js";
+import { registerPracticeTool } from "./practice-tool.js";
 
 const MODE_ENTRY = "erosiano-dev-mode";
 const LEGACY_MODE_ENTRY = "engineering-proxy-mode";
@@ -101,6 +103,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
   const refreshConfig = ctx => runtime.getConfig(ctx?.cwd ?? process.cwd(), true);
 
   const updateStatus = (ctx, config, notice) => runtime.syncStatus(ctx, isActive, effectiveMode(config), notice);
+  const practiceTool = registerPracticeTool(pi, { optedIn: process.env.EROSIANO_DEV_PRACTICE_TOOL === "1", isEnabled: ctx => refreshConfig(ctx).enabled && !isDisabledByEnv() });
 
   function notifyWarningOnce(ctx, message) {
     if (lastWarning === message) return;
@@ -208,7 +211,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
           return;
         }
         const registry = fileURLToPath(new URL("./practices.js", import.meta.url));
-        const message = `Resolve applicable erosiano-dev practices for the operator's scope. Establish evidence first. The local optional companion at ${registry} accepts --context with a JSON facets object (explicit true/false; omitted means unknown), optional projectOverrides with reason and evidence, enabledGates and mode. Use permitted tools, no auto-run or config writes. Read the catalog via --group if needed. Report selected, conflicting, suppressed and unknown rules; project conventions and safety remain authoritative. Supplied resolver facts are not authenticated or executed checks.\n\n${BASELINE_GUIDANCE}\nPractice scope: ${parsed.scope || "current working directory."}`;
+        const message = `Resolve applicable erosiano-dev practices for the operator's scope. Establish evidence first. The local optional companion at ${registry} accepts --context with a JSON facets object (explicit true/false; omitted means unknown), optional projectOverrides with reason and evidence, enabledGates and mode. Use permitted tools, no auto-run or config writes. Read the catalog via --group if needed. Optional host resolver tool: ${practiceTool}; use erosiano_resolve_practices only when registered and permitted. Report selected, conflicting, suppressed and unknown rules; project conventions and safety remain authoritative. Supplied resolver facts are not authenticated or executed checks.\n\n${BASELINE_GUIDANCE}${intelligenceGuidance(pi, config.intelligenceMode)}\nPractice scope: ${parsed.scope || "current working directory."}`;
         requestAgent(pi, ctx, message);
 
         return;
@@ -230,7 +233,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         } catch {
           // A symbolic scope or unavailable filesystem is normal for an agent-guided request.
         }
-        const message = `Establish a read-only code baseline for the requested scope. Do not implement changes or execute project checks in this baseline-only request.\n\n${BASELINE_GUIDANCE}\nLocal sample (not a verified project baseline): ${snapshot}${scope}`;
+        const message = `Establish a read-only code baseline for the requested scope. Do not implement changes or execute project checks in this baseline-only request.\n\n${BASELINE_GUIDANCE}\nLocal sample (not a verified project baseline): ${snapshot}${intelligenceGuidance(pi, config.intelligenceMode)}${scope}`;
         requestAgent(pi, ctx, message);
 
         return;
@@ -277,7 +280,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
       const names = pi.getCommands?.() ?? [];
       const ponytailFound = Array.isArray(names) && names.some(command => command?.name === "ponytail");
-      const msg = `erosiano-dev: ${enabled ? "ON" : "OFF"}; mode: ${effectiveMode(config).toUpperCase()} (${selectedSessionMode ? "session" : config.enforcementSource}); project default: ${(config.projectEnforcement ?? "unset").toUpperCase()}; global default: ${(config.globalEnforcement ?? "unset").toUpperCase()}; session: ${(selectedSessionMode ?? "inherit").toUpperCase()}; Ponytail command: ${ponytailFound ? "detected" : "not detected/unknown"}; Ponytail mode: not inspected`;
+      const msg = `erosiano-dev: ${enabled ? "ON" : "OFF"}; mode: ${effectiveMode(config).toUpperCase()} (${selectedSessionMode ? "session" : config.enforcementSource}); project default: ${(config.projectEnforcement ?? "unset").toUpperCase()}; global default: ${(config.globalEnforcement ?? "unset").toUpperCase()}; session: ${(selectedSessionMode ?? "inherit").toUpperCase()}; Ponytail command: ${ponytailFound ? "detected" : "not detected/unknown"}; Ponytail mode: not inspected; practice tool: ${practiceTool}; intelligence: ${intelligenceCapabilities(pi, config.intelligenceMode).status}`;
       const warnings = [config.configError, ...config.configWarnings, lastWarning].filter(Boolean);
       ctx.ui?.notify?.(warnings.length ? `${msg}; WARNING: ${warnings.join("; ")}` : msg, warnings.length ? "warning" : "info");
     },
@@ -294,7 +297,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         return;
       }
       const scope = typeof args === "string" && args.trim() ? `\nReview scope: ${args.trim()}` : "";
-      const message = `${REVIEW_INSTRUCTIONS}\n\n${BASELINE_GUIDANCE}\n\n${buildSdlcPolicy({ mode: effectiveMode(config) })}${scope}`;
+      const message = `${REVIEW_INSTRUCTIONS}\n\n${BASELINE_GUIDANCE}${intelligenceGuidance(pi, config.intelligenceMode)}\n\n${buildSdlcPolicy({ mode: effectiveMode(config) })}${scope}`;
       // Explicit operator command only: no automatic Ponytail invocation.
       requestAgent(pi, ctx, message);
     },
