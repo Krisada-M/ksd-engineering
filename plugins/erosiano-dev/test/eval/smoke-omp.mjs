@@ -26,10 +26,8 @@ export function verifyLocalCompletion(frame) {
   assert.equal(frame.agentInvoked, false, "Command unexpectedly invoked the agent");
 }
 
-// Only the explicit synthetic-prompt test may enable model turns; its endpoint must be loopback.
-export function createRpc(binary, project, home, flags, fixtureEndpoint) {
-  if (fixtureEndpoint !== undefined && !/^http:\/\/127\.0\.0\.1:[0-9]{1,5}\/v1$/.test(fixtureEndpoint)) throw new Error("Fixture model must use loopback");
-  // Only pass a minimal environment, never reuse auth/config from the operator's HOME.
+// Only pass a minimal environment, never reuse auth/config from the operator's HOME.
+export function isolatedEnvironment(home, flags = {}) {
   const env = {
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     HOME: home,
@@ -42,6 +40,14 @@ export function createRpc(binary, project, home, flags, fixtureEndpoint) {
   };
   mkdirSync(env.TMPDIR, { recursive: true });
   mkdirSync(env.PI_CODING_AGENT_DIR, { recursive: true });
+
+  return env;
+}
+
+// Only the explicit synthetic-prompt test may enable model turns; its endpoint must be loopback.
+export function createRpc(binary, project, home, flags, fixtureEndpoint, { installed = false, sessionDir, resume, extraExtensions = [] } = {}) {
+  if (fixtureEndpoint !== undefined && !/^http:\/\/127\.0\.0\.1:[0-9]{1,5}\/v1$/.test(fixtureEndpoint)) throw new Error("Fixture model must use loopback");
+  const env = isolatedEnvironment(home, flags);
   // Noninteractive OMP requires an available model even for local commands. Use a
   // dedicated loopback-only fixture with a dummy key; no real provider credential.
   writeFileSync(join(env.PI_CODING_AGENT_DIR, "models.yml"), JSON.stringify({
@@ -51,8 +57,16 @@ export function createRpc(binary, project, home, flags, fixtureEndpoint) {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 }],
     } },
   }));
-  const child = spawn(binary, ["--mode", "rpc", "--no-ui", "--no-session", "--no-extensions", "--no-skills", "--no-rules", "--no-context-files", "--model", MODEL, "--extension", extension],
-    { cwd: project, env, stdio: ["pipe", "pipe", "pipe"], shell: false });
+  const args = ["--mode", "rpc", "--no-ui", "--no-skills", "--no-rules", "--no-context-files", "--model", MODEL];
+  if (sessionDir) args.push("--session-dir", sessionDir);
+  else args.push("--no-session");
+  if (resume) {
+    if (!sessionDir) throw new Error("Resume requires isolated persistent session directory");
+    args.push("--resume", resume);
+  }
+  if (!installed) args.push("--no-extensions", "--extension", extension);
+  for (const path of extraExtensions) args.push("--extension", path);
+  const child = spawn(binary, args, { cwd: project, env, stdio: ["pipe", "pipe", "pipe"], shell: false });
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   const buffered = [];
   const pending = new Set();

@@ -25,7 +25,7 @@ function exactCI(ci, head) {
     if (name === "runtime-floor") {
       if (!steps.some(step => step.name === "Import dependency-free extension and companions" && step.conclusion === "success")) return false;
     } else if (name.startsWith("omp-host (")) {
-      if (!["Download and verify pinned OMP binary", "Real OMP command and migration smoke", "Real OMP prompt injection with loopback fixture"].every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) return false;
+      if (!["Download and verify pinned OMP binary", "Real OMP command and migration smoke", "Real OMP prompt injection with loopback fixture", "Real OMP marketplace migration and Ponytail coexistence"].every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) return false;
     } else if (!UNIT_STEPS.every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) {
       return false;
     }

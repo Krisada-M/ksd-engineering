@@ -15,20 +15,29 @@ function textContent(content) {
   return content.filter(block => block?.type === "text").map(block => block.text).join("\n");
 }
 
-export function verifyPromptPayload(body, mode) {
+export function verifyPromptPayload(body, mode, { legacy = false, ponytail } = {}) {
   assert.equal(body.model, "fixture", "Unexpected synthetic model");
   assert.ok(Array.isArray(body.messages), "Model request has no messages");
   const prompt = body.messages.filter(message => ["system", "developer"].includes(message.role)).map(message => textContent(message.content)).join("\n");
   const count = mode === "disabled" ? 0 : 1;
-  assert.equal(prompt.split(POLICY_MARKER).length - 1, count, "Wrong number of policy markers");
-  assert.equal(prompt.split(POLICY_END).length - 1, count, "Wrong number of policy ends");
+  const oldStart = "[Engineering Proxy Policy]";
+  const oldEnd = "[End Engineering Proxy Policy]";
+  const marker = legacy ? oldStart : POLICY_MARKER;
+  const end = legacy ? oldEnd : POLICY_END;
+  assert.equal(prompt.split(marker).length - 1, count, "Wrong number of policy markers");
+  assert.equal(prompt.split(end).length - 1, count, "Wrong number of policy ends");
   if (mode !== "disabled") {
     assert.ok(prompt.includes("Enforcement=" + mode + ":"), "Incorrect effective enforcement mode");
   }
-  assert.ok(!prompt.includes("[Engineering Proxy Policy]"), "Legacy policy duplicated");
+  assert.ok(!prompt.includes(legacy ? POLICY_MARKER : oldStart), "Unexpected other-generation policy");
+  if (ponytail !== undefined) {
+    const marker = "PONYTAIL MODE ACTIVE";
+    assert.equal(prompt.split(marker).length - 1, ponytail === "off" ? 0 : 1, "Wrong number of Ponytail sections");
+    if (ponytail !== "off") assert.ok(prompt.includes("level: " + ponytail), "Incorrect Ponytail mode");
+  }
 }
 
-async function startFixture() {
+export async function startFixture() {
   let expectation = null;
   let observed = 0;
   let failure;
@@ -45,7 +54,7 @@ async function startFixture() {
         chunks.push(chunk);
       }
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      verifyPromptPayload(body, expectation);
+      verifyPromptPayload(body, expectation.mode, expectation.options);
       observed++;
       assert.equal(observed, 1, "Unexpected duplicate provider call");
       const base = { id: "chatcmpl-erosiano-fixture", object: "chat.completion.chunk", created: 1, model: "fixture" };
@@ -69,9 +78,9 @@ async function startFixture() {
 
   return {
     endpoint: "http://127.0.0.1:" + server.address().port + "/v1",
-    async turn(rpc, mode) {
+    async turn(rpc, mode, options) {
       assert.equal(expectation, null);
-      expectation = mode;
+      expectation = { mode, options };
       observed = 0;
       try {
         await rpc.request("prompt", { message: "Reply with fixture OK; no tools are needed." }, { invokeAgent: true });
