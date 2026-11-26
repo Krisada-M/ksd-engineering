@@ -103,7 +103,9 @@ export function createExtension(pi, { globalConfigPath } = {}) {
   const refreshConfig = ctx => runtime.getConfig(ctx?.cwd ?? process.cwd(), true);
 
   const updateStatus = (ctx, config, notice) => runtime.syncStatus(ctx, isActive, effectiveMode(config), notice);
-  const practiceTool = registerPracticeTool(pi, { optedIn: process.env.EROSIANO_DEV_PRACTICE_TOOL === "1", isEnabled: ctx => refreshConfig(ctx).enabled && !isDisabledByEnv() });
+  const practiceTool = registerPracticeTool(pi, { optedIn: process.env.EROSIANO_DEV_PRACTICE_TOOL === "1", isEnabled: ctx => refreshConfig(ctx).enabled && !isDisabledByEnv(), getRoot: ctx => refreshConfig(ctx).root });
+  const registry = fileURLToPath(new URL("./practices.js", import.meta.url));
+  const selectionGuide = `Select applicable practices only after baseline. Optional host resolver: ${practiceTool}; CLI: ${registry}. For evidence-bound selection, capture the scoped baseline including relevant callers, tests and configs, then supply its scope/additionalPaths/fingerprint and observation provenance (paths, classification, confidence), plus provenance for overrides and gateEvidence. Use --context with the operator-selected --root or the registered read-only resolver; do not activate tools or run commands without permission. Stale/incomplete evidence means recapture or report UNKNOWN. Interpretations are supplied, not proven. If no trusted fresh context is available, inspect relevant groups and native evidence directly; never waive required gates.`;
 
   function notifyWarningOnce(ctx, message) {
     if (lastWarning === message) return;
@@ -210,8 +212,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
 
           return;
         }
-        const registry = fileURLToPath(new URL("./practices.js", import.meta.url));
-        const message = `Resolve applicable erosiano-dev practices for the operator's scope. Establish evidence first. The local optional companion at ${registry} accepts --context with a JSON facets object (explicit true/false; omitted means unknown), optional projectOverrides with reason and evidence, enabledGates and mode. Use permitted tools, no auto-run or config writes. Read the catalog via --group if needed. Optional host resolver tool: ${practiceTool}; use erosiano_resolve_practices only when registered and permitted. Report selected, conflicting, suppressed and unknown rules; project conventions and safety remain authoritative. Supplied resolver facts are not authenticated or executed checks.\n\n${BASELINE_GUIDANCE}${intelligenceGuidance(pi, config.intelligenceMode)}\nPractice scope: ${parsed.scope || "current working directory."}`;
+        const message = `Resolve applicable erosiano-dev practices for the operator's scope. Establish evidence first. The local optional companion at ${registry} accepts --context with a JSON facets object (explicit true/false; omitted means unknown), optional projectOverrides with reason and evidence, enabledGates and mode. Use permitted tools, no auto-run or config writes. Read the catalog via --group if needed. ${selectionGuide} Report selected, conflicting, suppressed and unknown rules; project conventions and safety remain authoritative. Supplied resolver facts are not authenticated or executed checks.\n\n${BASELINE_GUIDANCE}${intelligenceGuidance(pi, config.intelligenceMode)}\nPractice scope: ${parsed.scope || "current working directory."}`;
         requestAgent(pi, ctx, message);
 
         return;
@@ -297,7 +298,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
         return;
       }
       const scope = typeof args === "string" && args.trim() ? `\nReview scope: ${args.trim()}` : "";
-      const message = `${REVIEW_INSTRUCTIONS}\n\n${BASELINE_GUIDANCE}${intelligenceGuidance(pi, config.intelligenceMode)}\n\n${buildSdlcPolicy({ mode: effectiveMode(config) })}${scope}`;
+      const message = `${REVIEW_INSTRUCTIONS}\n\n${BASELINE_GUIDANCE}\n\n${selectionGuide}${intelligenceGuidance(pi, config.intelligenceMode)}\n\n${buildSdlcPolicy({ mode: effectiveMode(config) })}${scope}`;
       // Explicit operator command only: no automatic Ponytail invocation.
       requestAgent(pi, ctx, message);
     },

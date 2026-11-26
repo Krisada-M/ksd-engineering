@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 import { closeSync, constants, fstatSync, lstatSync, openSync, opendirSync, readSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { devNull } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MAX_FILES = 64;
+const MAX_ADDITIONAL_PATHS = 24;
 const MAX_FILE_BYTES = 128 * 1024;
 const MAX_DIRECTORY_ENTRIES = 256;
 const KNOWN_FILES = [
   "AGENTS.md", "README.md", "CONTRIBUTING.md", "package.json", "tsconfig.json", "jsconfig.json",
   "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", ".eslintrc.json", "biome.json", "biome.jsonc",
   ".prettierrc", ".prettierrc.json", "vitest.config.ts", "vitest.config.js", "jest.config.js", "jest.config.ts",
+  ".erosiano-dev.json", ".engineering-proxy.json", ".editorconfig", "turbo.json", "nx.json", "tsconfig.base.json",
+  "Makefile", "Dockerfile", "compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml",
   "pnpm-workspace.yaml", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock",
   "pyproject.toml", "requirements.txt", "go.mod", "Cargo.toml", "Gemfile", "composer.json", "pom.xml",
 ];
@@ -18,6 +23,13 @@ const SKIP_DIRECTORIES = new Set([".git", "node_modules", ".venv", "vendor", "di
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|cs|rb|php|sql|css|html|vue|svelte)$/i;
 const SECRET_NAME = /(?:^\.env(?:\.|$)|(?:credential|secret|password|token|private.?key)|\.(?:pem|key|p12|pfx)$)/i;
 const CONTROL = /[\u0000-\u001f\u007f]/;
+const EXPLICIT_EVIDENCE = /\.(?:md|jsonc?|ya?ml|toml|ini|xml|sh)$/i;
+
+function supportedEvidence(path) {
+  const name = basename(path);
+
+  return SOURCE_FILE.test(name) || KNOWN_FILES.includes(name) || EXPLICIT_EVIDENCE.test(name);
+}
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 
@@ -104,6 +116,36 @@ function revision(root) {
   }
 }
 
+// Opt-in only for the operator-invoked CLI. Never invoked during an ordinary agent turn.
+// Git handles its own linked-worktree metadata. No shell, no repository hooks or inherited GIT_* overrides.
+function nativeRevision(root) {
+  const env = {
+    PATH: process.env.PATH ?? "/usr/bin:/bin",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: devNull,
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_TERMINAL_PROMPT: "0",
+  };
+  const run = args => spawnSync("git", ["-C", root, ...args], { env, encoding: "utf8", timeout: 2000, maxBuffer: 16384, shell: false });
+  try {
+    const result = run(["rev-parse", "--show-toplevel", "HEAD"]);
+    if (result.error || result.status !== 0) return { status: "unknown", reason: "Native Git revision unavailable" };
+    const [top, head, ...rest] = result.stdout.trimEnd().split("\n");
+    if (rest.length || !top || CONTROL.test(top) || realpathSync(top) !== root || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(head ?? "")) {
+      return { status: "unknown", reason: "Native Git root or revision did not match" };
+    }
+    const symbolic = run(["symbolic-ref", "--quiet", "HEAD"]);
+    if (symbolic.error) return { status: "unknown", reason: "Native Git branch unavailable" };
+    const branch = symbolic.status === 0 ? symbolic.stdout.trim() : null;
+    if (symbolic.status !== 0 && symbolic.status !== 1) return { status: "unknown", reason: "Native Git branch unavailable" };
+    if (branch !== null && !/^refs\/heads\/[A-Za-z0-9._/-]+$/.test(branch)) return { status: "unknown", reason: "Unsupported native Git reference" };
+
+    return { status: "observed", head, branch };
+  } catch {
+    return { status: "unknown", reason: "Native Git metadata unreadable" };
+  }
+}
+
 function directorySample(path) {
   const dir = opendirSync(path);
   const entries = [];
@@ -133,27 +175,44 @@ function directorySample(path) {
 function role(path) {
   const name = basename(path);
   if (["AGENTS.md", "README.md", "CONTRIBUTING.md"].includes(name)) return "instruction";
-  if (KNOWN_FILES.includes(name)) return "tooling";
+  if (KNOWN_FILES.includes(name) || path.split(sep).includes("workflows")) return "tooling";
   if (/(?:^|[.])(?:test|spec)\.[^.]+$/.test(name)) return "test";
 
   return "source";
 }
 
 /** A bounded snapshot of sampled evidence, not an inferred or complete project convention baseline. */
-export function collectBaselineEvidence({ root, scope = "." }) {
-  const canonicalRoot = realpathSync(resolve(root));
+export function collectBaselineEvidence({ root, scope = ".", additionalPaths = [], useGit = false }) {
+  if (typeof root !== "string" || !root || typeof scope !== "string" || !scope) throw new Error("Expected project root and scope");
+  if (!Array.isArray(additionalPaths) || additionalPaths.length > MAX_ADDITIONAL_PATHS) throw new Error("Too many explicit evidence paths");
+  if (typeof useGit !== "boolean") throw new Error("Invalid native Git option");
+
+  const requestedRoot = resolve(root);
+  const canonicalRoot = realpathSync(requestedRoot);
   if (!info(canonicalRoot)?.isDirectory()) throw new Error("Project root must be a directory");
-  const target = safePath(canonicalRoot, scope);
+  // Absolute cwd values can use a symlink alias of the operator-selected root (not a scope symlink).
+  const scoped = isAbsolute(scope) && within(requestedRoot, resolve(scope)) ? relative(requestedRoot, resolve(scope)) || "." : scope;
+  const target = safePath(canonicalRoot, scoped);
   const targetInfo = info(target);
   if (!targetInfo?.isFile() && !targetInfo?.isDirectory()) throw new Error("Scope must be a file or directory");
-  if (targetInfo.isFile() && !SOURCE_FILE.test(basename(target)) && !KNOWN_FILES.includes(basename(target))) throw new Error("Unsupported evidence file type");
+  if (targetInfo.isFile() && !supportedEvidence(target)) throw new Error("Unsupported evidence file type");
 
   const targetDirectory = targetInfo.isDirectory() ? target : dirname(target);
   const evidence = [];
   const unknowns = [];
   const candidates = new Set();
-  const revisionBefore = revision(canonicalRoot);
+  const readRevision = useGit ? nativeRevision : revision;
+  const revisionBefore = readRevision(canonicalRoot);
   if (targetInfo.isFile()) candidates.add(target);
+  // Callers, test files and CI/tooling beyond the direct sample must be explicit and bounded.
+  const explicit = new Set();
+  for (const requested of additionalPaths) {
+    if (typeof requested !== "string" || isAbsolute(requested)) throw new Error("Additional evidence paths must be relative to the project root");
+    const path = safePath(canonicalRoot, requested);
+    if (!info(path)?.isFile() || !supportedEvidence(path)) throw new Error("Unsupported additional evidence file");
+    explicit.add(relative(canonicalRoot, path));
+    candidates.add(path);
+  }
   let current = targetDirectory;
   while (true) {
     for (const name of KNOWN_FILES) {
@@ -177,7 +236,11 @@ export function collectBaselineEvidence({ root, scope = "." }) {
     directory = { path: relative(canonicalRoot, targetDirectory) || ".", fingerprint: sha256(JSON.stringify(sample.entries)), count: sample.entries.length, truncated: sample.truncated };
     if (sample.truncated) unknowns.push("Directory inventory truncated");
     for (const entry of sample.entries) {
-      if (entry.kind !== "file" || !SOURCE_FILE.test(entry.name)) continue;
+      if (!SOURCE_FILE.test(entry.name)) continue;
+      if (entry.kind !== "file") {
+        unknowns.push("Nonregular source evidence excluded");
+        continue;
+      }
       if (candidates.size >= MAX_FILES) {
         unknowns.push("Source sample cap reached");
         break;
@@ -200,9 +263,10 @@ export function collectBaselineEvidence({ root, scope = "." }) {
       unknowns.push("Evidence unreadable: " + rel);
     }
   }
-  const revisionAfter = revision(canonicalRoot);
+  const revisionAfter = readRevision(canonicalRoot);
   if (revisionBefore.status !== "observed" || revisionAfter.status !== "observed" || JSON.stringify(revisionBefore) !== JSON.stringify(revisionAfter)) unknowns.push("Git revision unavailable or changed during discovery");
   const record = { schemaVersion: 1, root: canonicalRoot, scope: relative(canonicalRoot, target) || ".", revision: revisionAfter,
+    additionalPaths: [...explicit].sort(), revisionSource: useGit ? "native-git" : "local-metadata",
     evidence, directory, unknowns: [...new Set(unknowns)], confidence: "LOW", coverage: "SAMPLED_EVIDENCE_ONLY" };
   const fingerprint = sha256(JSON.stringify(record));
 
@@ -214,7 +278,7 @@ export class ScopedBaselineCache {
 
   capture(input) {
     const snapshot = collectBaselineEvidence(input);
-    const key = JSON.stringify([snapshot.root, snapshot.scope]);
+    const key = JSON.stringify([snapshot.root, snapshot.scope, snapshot.additionalPaths, snapshot.revisionSource]);
     const previous = this.#entries.get(key);
     const matched = snapshot.cacheable && previous?.cacheable && previous.fingerprint === snapshot.fingerprint;
     this.#entries.delete(key);
@@ -238,8 +302,19 @@ export function summarizeBaselineEvidence(record) {
 }
 
 function main(args) {
-  if (args.length !== 4 || args[0] !== "--root" || args[2] !== "--scope") throw new Error("Usage: erosiano-baseline --root project --scope relative-path");
-  console.log(JSON.stringify(collectBaselineEvidence({ root: args[1], scope: args[3] }), null, 2));
+  const usage = "Usage: erosiano-baseline --root project --scope relative-path [--include relative-file]... [--git]";
+  if (args.length < 4 || args[0] !== "--root" || args[2] !== "--scope") throw new Error(usage);
+  const additionalPaths = [];
+  let useGit = false;
+  for (let i = 4; i < args.length; i++) {
+    if (args[i] === "--git" && !useGit) {
+      useGit = true;
+      continue;
+    }
+    if (args[i] !== "--include" || i + 1 >= args.length || args[i + 1].startsWith("--")) throw new Error(usage);
+    additionalPaths.push(args[++i]);
+  }
+  console.log(JSON.stringify(collectBaselineEvidence({ root: args[1], scope: args[3], additionalPaths, useGit }), null, 2));
 }
 
 function isMainModule() {

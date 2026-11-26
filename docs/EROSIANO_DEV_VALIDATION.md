@@ -19,8 +19,8 @@ The scorer rejects incomplete/unmatched arms and duplicate trials, reports denom
 | Gate | Required evidence |
 |---|---|
 | Migration | Old config/session replay and rollback; single active policy extension; actual OMP marketplace install, restart, status and disable flags |
-| Baseline | Explicit scoped evidence, fingerprint changes, unknown/inaccessible paths, nested package conventions, mixed legacy/current and actual dirty/untracked evidence; no claim that a sampled hash proves repository-wide freshness |
-| Practices | Catalog integrity (138 IDs), explicit facet resolution, unknown/conflict handling, actual agent uses only applicable practices after baseline |
+| Baseline | Explicit scoped evidence including chosen callers/tests/CI, fingerprint changes, unknown/inaccessible paths, nested package conventions, mixed legacy/current and actual dirty/untracked evidence; explicit native Git linked-worktree support; no claim that a sampled hash proves repository-wide freshness |
+| Practices | Catalog integrity (138 IDs), explicit facet resolution, sampled-byte-bound selection with provenance and stale-context rejection, unknown/conflict handling, actual agent uses only applicable practices after baseline |
 | Native enforcement | Existing CI lint/typecheck/build/dist parity, actual package consumer, opt-in typed profile and representative real host adoption |
 | Intelligence | Separately configured approved CLI or MCP, root/version/coverage validation, stale/unavailable fallback, no simultaneous duplicate OMP policy extensions |
 | Performance | Same tokenizer and workload for baseline and candidate; measured token and latency budget agreed before comparative evaluation, including opt-in tool schemas |

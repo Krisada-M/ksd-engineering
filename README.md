@@ -65,6 +65,37 @@ The bridge checks the documented OMP active MCP names `mcp__ksd_intelligence_ei_
 
 Source contracts inspected: [KSD tools](https://github.com/Krisada-M/ksd-intelligence/blob/e2be8fa54b318afd88f2c5312edd2fb6a751c77a/docs/TOOLS.md), [bundled OMP adapter](https://github.com/Krisada-M/ksd-intelligence/blob/e2be8fa54b318afd88f2c5312edd2fb6a751c77a/src/adapters/omp/extension.ts), [OMP extensions](https://github.com/can1357/oh-my-pi/blob/main/docs/extensions.md), [OMP MCP config](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md), [MCP name bridge](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-server-tool-authoring.md). Live OMP + MCP and tool registration matrix remains NOT VERIFIED.
 
+## Evidence-bound practice selection
+
+For substantial changes and explicit reviews, first inspect the actual project conventions and contracts. Extend the local sample to include the relevant caller, test, configuration or CI file:
+
+```bash
+erosiano-baseline --root . --scope apps/web --include packages/shared/src/api.ts --include .github/workflows/tests.yml
+```
+
+Up to 24 explicit relative files may be added to the bounded sample; outside-root, excluded, missing or symlinked explicit paths are refused. Extra paths are part of the fingerprint and cache key. By default no subprocess is launched. For a linked Git worktree, an operator may opt into `--git` on the CLI to use bounded native Git revision discovery instead of parsing local metadata; this reads Git's selected metadata outside the worktree when needed. Only use it with a trusted repository and Git executable. It does not run hooks, build, test or index. The OMP command and read-only resolver tool never opt into it automatically.
+
+To bind a practice decision to the snapshot, use a context JSON such as:
+
+```json
+{
+  "baseline": {
+    "scope": "apps/web",
+    "additionalPaths": ["packages/shared/src/api.ts", ".github/workflows/tests.yml"],
+    "fingerprint": "<fingerprint from the current baseline snapshot>"
+  },
+  "facets": { "typescript": true, "database": false },
+  "observations": {
+    "typescript": { "paths": ["apps/web/package.json", "apps/web/main.ts"], "classification": "CURRENT", "confidence": "HIGH" },
+    "database": { "paths": ["apps/web/main.ts"], "classification": "LOCAL", "confidence": "MEDIUM" }
+  }
+}
+```
+
+These are illustrative project-specific paths/facets; use actual inspected files and do not assert negative facts solely because a keyword was absent. Run `erosiano-practices --context context.json --root .` (append `--git` only if used for the snapshot). Overrides in `projectOverrides` additionally require a `provenance` object of the same shape; each enabled native gate needs an entry in `gateEvidence`. The optional OMP resolver accepts the same context and derives the root from the host. It never accepts a root or Git option from context. Low-confidence or legacy/transitional observations become unknown, and uncertain overrides/gates are refused. Missing, changed or incomplete snapshots cannot produce evidence-bound selection. Legacy supplied-context mode remains available and explicitly unverified.
+
+A matched fingerprint proves only that **sampled evidence bytes** matched during the bounded capture; it does not prove semantic classification, completeness, safety, or native gate execution. Inspect all affected consumers and verify actual checks. No whole-repository cache or automatic project policy enforcement is claimed.
+
 ## Ownership boundaries
 
 - **Ponytail** owns YAGNI, removing needless abstractions, and `ponytail-review`.
