@@ -7,8 +7,11 @@ const COUNTS = ["tp", "fp", "fn", "tn"];
 const METRICS = ["inputTokens", "outputTokens", "latencyMs", "costUsd"];
 
 const nonempty = value => typeof value === "string" && value.trim().length > 0;
+
 const count = value => Number.isSafeInteger(value) && value >= 0;
+
 const number = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
+
 const rate = (n, d) => d > 0 ? n / d : null;
 const manifest = JSON.parse(readFileSync(new URL("./fixtures/cases.json", import.meta.url), "utf8"));
 const caseIds = manifest.map(c => c.id);
