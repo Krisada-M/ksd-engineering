@@ -56,13 +56,18 @@ export async function startFixture() {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       verifyPromptPayload(body, expectation.mode, expectation.options);
       observed++;
-      assert.equal(observed, 1, "Unexpected duplicate provider call");
+      const steps = expectation.options?.steps;
+      assert.ok(observed <= (steps?.length ?? 1), "Unexpected duplicate provider call");
+      const step = steps?.[observed - 1];
+      step?.inspect?.(body);
       const base = { id: "chatcmpl-erosiano-fixture", object: "chat.completion.chunk", created: 1, model: "fixture" };
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "close" });
-      for (const delta of [{ role: "assistant", content: "" }, { content: "fixture OK" }]) {
-        res.write("data: " + JSON.stringify({ ...base, choices: [{ index: 0, delta, finish_reason: null }] }) + "\n\n");
+      const delta = step?.call ? { tool_calls: [{ index: 0, id: "call_fixture_" + observed, type: "function",
+        function: { name: step.call.name, arguments: JSON.stringify(step.call.args) } }] } : { content: "fixture OK" };
+      for (const part of [{ role: "assistant", content: "" }, delta]) {
+        res.write("data: " + JSON.stringify({ ...base, choices: [{ index: 0, delta: part, finish_reason: null }] }) + "\n\n");
       }
-      res.write("data: " + JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }) + "\n\n");
+      res.write("data: " + JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: step?.call ? "tool_calls" : "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }) + "\n\n");
       res.end("data: [DONE]\n\n");
     } catch (error) {
       failure ??= error;
@@ -83,9 +88,9 @@ export async function startFixture() {
       expectation = { mode, options };
       observed = 0;
       try {
-        await rpc.request("prompt", { message: "Reply with fixture OK; no tools are needed." }, { invokeAgent: true });
+        await rpc.request("prompt", { message: options?.message ?? "Reply with fixture OK; no tools are needed." }, { invokeAgent: true });
         if (failure) throw failure;
-        assert.equal(observed, 1, "No synthetic provider request observed");
+        assert.equal(observed, options?.steps?.length ?? 1, "Incomplete synthetic provider request sequence");
       } catch (error) {
         throw failure ?? error;
       } finally {
