@@ -31,5 +31,6 @@
   },
   "scripts": {
     "test": "node --import ./test/helpers/isolated-home.js --test test/*.test.js"
-  }
+  },
+  "types": "./index.d.ts"
 }

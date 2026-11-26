@@ -59,3 +59,16 @@ test("policy pack tool refuses unauthenticated supplied-only context", () => {
   assert.match(response.content[0].text, /requires fresh sampled evidence/);
   assert.equal(resolvePracticeTool({ context: '{"facets":{}}', format: "unknown" }).isError, true);
 });
+
+test("native tools are discovered without confusing direct MCP names or enabling tools", () => {
+  const native = ["ei_status", "ei_search", "ei_impact", "ei_changes"];
+  const pi = { getActiveTools: () => native };
+  assert.equal(intelligenceCapabilities(pi, "native").status, "ADVERTISED");
+  assert.equal(intelligenceCapabilities(pi, "mcp").status, "UNAVAILABLE");
+  assert.equal(intelligenceCapabilities({ getActiveTools: () => names }, "native").status, "UNAVAILABLE");
+  assert.equal(intelligenceCapabilities({ getActiveTools: () => [native[0]] }, "native").status, "PARTIAL");
+  assert.match(intelligenceGuidance(pi, "native"), /native tools \(names advertised, not authenticated\)/);
+  assert.match(intelligenceGuidance(pi, "native"), /ei_impact/);
+  assert.match(intelligenceGuidance(pi, "native"), /never waives native gates/);
+  assert.equal(intelligenceGuidance(pi, "off"), "");
+});

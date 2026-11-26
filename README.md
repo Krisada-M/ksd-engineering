@@ -285,3 +285,7 @@ docs/                       Specification and validation protocol
 ```
 
 See [historical v0.6 acceptance](docs/ACCEPTANCE.md) for the original release record. Licensed under MIT.
+
+## Embedding in KSD Intelligence (composition API)
+
+`ksd-engineering` remains the upstream source of truth. A consuming product may import `createExtension` from the pinned runtime entry `index.js` and invoke it exactly once from its OMP composition root. Use `createExtension(pi, { defaultIntelligenceMode: "native", label: "ksd-intelligence" })` when the product supplies `ei_status`, `ei_search`, `ei_impact`, and `ei_changes` as native OMP tools. The default applies only when neither project nor global config sets `intelligenceMode`; explicit `off`, `cli`, `mcp` or `native` still wins. Native mode checks the complete exact active tool set on demand, does not invoke or enable tools, and falls back to native inspection for unknown or incomplete capabilities. Standalone behavior remains unchanged. Do not install both standalone and composed policy extensions. The consuming product should pin the source commit and verify an allowlisted bundle before packaging, without network downloads at agent startup. AGY requires a separate host-native adapter; this OMP factory is not an AGY API.
