@@ -2,6 +2,7 @@ import { loadConfig, setScopedMode, SUPPORTED_MODES } from "./config.js";
 import { buildSdlcPolicy } from "./sdlc.js";
 import { augmentSystemPrompt, buildPolicy, SECTION_KEY } from "./policy.js";
 import { KsdRuntime } from "./dist/runtime.js";
+import { fileURLToPath } from "node:url";
 
 const MODE_ENTRY = "erosiano-dev-mode";
 const LEGACY_MODE_ENTRY = "engineering-proxy-mode";
@@ -9,7 +10,7 @@ const isDisabledByEnv = () => process.env.EROSIANO_DEV_DISABLED === "1" || proce
 
 export function parseEngineeringCommand(input) {
   const text = String(input ?? "").trim();
-  const scoped = /^(baseline|review)(?:\s+([\s\S]+))?$/i.exec(text);
+  const scoped = /^(baseline|review|practices)(?:\s+([\s\S]+))?$/i.exec(text);
   if (scoped) return { type: scoped[1].toLowerCase(), scope: scoped[2]?.trim() ?? "" };
 
   const words = text.toLowerCase().split(/\s+/);
@@ -176,7 +177,7 @@ export function createExtension(pi, { globalConfigPath } = {}) {
   });
 
   const engineeringCommand = {
-    description: "Engineering policy: status, session mode/reset, global mode/reset, repo mode/reset, baseline [scope], review [scope]",
+    description: "Engineering policy: status, session mode/reset, global mode/reset, repo mode/reset, baseline [scope], practices [scope], review [scope]",
     handler: async (args, ctx) => {
       // Refresh and draw status BEFORE any validation or disabled early return, so a rejected
       // command cannot leave stale status behind.
@@ -186,13 +187,26 @@ export function createExtension(pi, { globalConfigPath } = {}) {
       const enabled = config.enabled && !isDisabledByEnv();
 
       if (parsed.type === "invalid") {
-        ctx.ui?.notify?.("Usage: /erosiano-dev [status|balanced|adaptive|reset|global <balanced|adaptive|reset>|repo <balanced|adaptive|reset>|baseline [scope]|review [scope]]", "warning");
+        ctx.ui?.notify?.("Usage: /erosiano-dev [status|balanced|adaptive|reset|global <balanced|adaptive|reset>|repo <balanced|adaptive|reset>|baseline [scope]|practices [scope]|review [scope]]", "warning");
 
         return;
       }
 
       if (parsed.type === "review") {
         await reviewCommand.handler(parsed.scope, ctx);
+
+        return;
+      }
+
+      if (parsed.type === "practices") {
+        if (!enabled) {
+          ctx.ui?.notify?.("erosiano-dev is disabled for this project", "warning");
+
+          return;
+        }
+        const registry = fileURLToPath(new URL("./practices.js", import.meta.url));
+        const message = `Resolve applicable erosiano-dev practices for the operator's scope. Establish evidence first. The local optional companion at ${registry} accepts --context with a JSON facets object (explicit true/false; omitted means unknown), optional projectOverrides with reason and evidence, enabledGates and mode. Use permitted tools, no auto-run or config writes. Read the catalog via --group if needed. Report selected, conflicting, suppressed and unknown rules; project conventions and safety remain authoritative. Supplied resolver facts are not authenticated or executed checks.\n\n${BASELINE_GUIDANCE}\nPractice scope: ${parsed.scope || "current working directory."}`;
+        requestAgent(pi, ctx, message);
 
         return;
       }

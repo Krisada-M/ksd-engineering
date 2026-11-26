@@ -10,7 +10,7 @@ Keeps your `balanced + adaptive + readable` engineering standards separate from 
 
 ## Unreleased: agent-guided project baseline foundation
 
-This release candidate adds a short scoped-baseline requirement to both modes, detailed baseline guidance in explicit review, and `/erosiano-dev baseline [scope]` for an explicit read-only discovery request. Scope text retains its case; a busy agent receives a follow-up. Disabled configuration prevents dispatch. The extension does not scan repositories or enforce baseline findings automatically. The agent collects scoped evidence through approved tools. Automatic baseline resolver/cache, full practice catalog and live OMP acceptance remain follow-up work.
+This release candidate adds a short scoped-baseline requirement to both modes, detailed baseline guidance in explicit review, and `/erosiano-dev baseline [scope]` for an explicit read-only discovery request. Scope text retains its case; a busy agent receives a follow-up. Disabled configuration prevents dispatch. The extension does not scan repositories or enforce baseline findings automatically. The agent collects scoped evidence through approved tools. Automatic baseline freshness/cache and live OMP acceptance remain follow-up work. The versioned registry and supplied-context resolver below cover the approved practice catalog.
 
 ## Migration from engineering-proxy (unreleased)
 
@@ -19,6 +19,23 @@ This release candidate adds a short scoped-baseline requirement to both modes, d
 - Both old and new disable flags are honored. Both session-entry names are read in chronological order; only the new name is written. A restart with one active plugin is required for prompt/status migration. Complete old and new owned blocks reconcile; malformed tails are preserved and warned.
 - `/engineering-proxy` and `/engineering-review` remain temporary compatibility aliases for the canonical commands. The optional companion package name changes to `omp-erosiano-dev`; package consumers must deliberately update the dependency/import or continue using their installed legacy package. Existing ESLint rule namespace `engineering-proxy/*` and CLI names `ksd-check-changed`, `ksd-review-verdict` are preserved.
 - Marketplace commands below describe the candidate identity after publication. Actual host marketplace migration, upgrade/downgrade, and live session behavior are **NOT VERIFIED**. The repository URL stays unchanged; no package registry publication is implied.
+
+## Practice registry and resolution (unreleased)
+
+The local catalog (`plugins/erosiano-dev/practices.json`) has 138 stable versioned practice IDs derived from the approved spec. `/erosiano-dev practices [scope]` explicitly requests agent-guided baseline and selection. No new always-on tool schema or full catalog in every-turn policy. Use the optional companion on a context you have collected with permission:
+
+```json
+{
+  "facets": { "code": true, "typescript": true, "frontend": false, "database": false },
+  "mode": "balanced",
+  "projectOverrides": {
+    "A05": { "disposition": "prefer-project", "reason": "Layer-first", "evidence": "AGENTS.md:7" }
+  },
+  "enabledGates": ["T06"]
+}
+```
+
+Run `node plugins/erosiano-dev/practices.js --context context.json` (or installed `erosiano-practices --context context.json`), or `--group typescript` to inspect one group. Facts are explicit; omitted facets stay UNKNOWN, never PASS. Applicable rules are selected by their predicates. Project preferences suppress only non-required guidance; required/security/gate conflicts are surfaced. Enabled native gates are supplied facts, not proof of lint adoption or execution. The resolver never reads host source, executes checks or changes config. Catalog mechanisms and applicability are reviewable defaults, not universal requirements. The exact mode-specific style semantics remain in the existing policy.
 
 ## Ownership boundaries
 
