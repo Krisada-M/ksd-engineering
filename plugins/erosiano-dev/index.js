@@ -77,8 +77,9 @@ const REVIEW_INSTRUCTIONS = `Review the current requested change as erosiano-dev
 6. Style: independently verify the KSD style profile from the erosiano-dev policy (guard clauses, no nested ternaries, result-vs-throw error split, strict types, why-only comments, blank-line rules), repo conventions and type safety. Review changed scope, not unrelated code.
 Report: acceptance criteria, affected contracts/risk, findings anchored to files with severity, exact observed check evidence (commands and results), and missing/denied/skipped/failed checks — then delivery and rollback implications. Never label release or merge readiness with unresolved required or security gates; no auto release/merge/push/deploy. Ponytail review must not be invoked here unless the user separately requested it; do not report a pass you did not observe.`;
 
-export function createExtension(pi, { globalConfigPath } = {}) {
-  pi.setLabel?.("erosiano-dev");
+export function createExtension(pi, { globalConfigPath, defaultIntelligenceMode, label = "erosiano-dev" } = {}) {
+  if (defaultIntelligenceMode !== undefined && !["off", "native", "mcp", "cli"].includes(defaultIntelligenceMode)) throw new Error("Invalid composed intelligence default");
+  pi.setLabel?.(label);
   // The old extension cannot coordinate with this one. Never register over detected legacy commands.
   let existingCommands;
   try {
@@ -92,7 +93,13 @@ export function createExtension(pi, { globalConfigPath } = {}) {
     return;
   }
   // One runtime per extension instance: caches must not leak between hosts or tests.
-  const runtime = new KsdRuntime(cwd => loadConfig(cwd, { globalConfigPath }), buildPolicy, isDisabledByEnv);
+  const runtime = new KsdRuntime(cwd => {
+    const config = loadConfig(cwd, { globalConfigPath });
+
+    return config.intelligenceMode === undefined && defaultIntelligenceMode !== undefined
+      ? { ...config, intelligenceMode: defaultIntelligenceMode }
+      : config;
+  }, buildPolicy, isDisabledByEnv);
 
   const baselines = new ScopedBaselineCache();
   let isActive = false;
