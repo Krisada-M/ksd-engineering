@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const extension = fileURLToPath(new URL("../../index.js", import.meta.url));
 const COMMANDS = ["erosiano-dev", "engineering-proxy", "engineering-review"];
 const TIMEOUT = 30000;
+const MODEL = "erosiano-smoke/fixture";
 
 export function verifyCommandCatalog(data) {
   assert.ok(Array.isArray(data?.commands), "OMP command catalog unavailable");
@@ -38,7 +39,17 @@ function createRpc(binary, project, home, flags) {
     ...flags,
   };
   mkdirSync(env.TMPDIR, { recursive: true });
-  const child = spawn(binary, ["--mode", "rpc", "--no-ui", "--no-session", "--no-extensions", "--no-skills", "--no-rules", "--no-context-files", "--extension", extension],
+  mkdirSync(env.PI_CODING_AGENT_DIR, { recursive: true });
+  // Noninteractive OMP requires an available model even for local commands. Use a
+  // dedicated loopback-only fixture with a dummy key; no real provider credential.
+  writeFileSync(join(env.PI_CODING_AGENT_DIR, "models.yml"), JSON.stringify({
+    providers: { "erosiano-smoke": {
+      baseUrl: "http://127.0.0.1:1/v1", apiKey: "fixture-not-a-secret", api: "openai-completions",
+      models: [{ id: "fixture", name: "Command smoke fixture", reasoning: false, input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 }],
+    } },
+  }));
+  const child = spawn(binary, ["--mode", "rpc", "--no-ui", "--no-session", "--no-extensions", "--no-skills", "--no-rules", "--no-context-files", "--model", MODEL, "--extension", extension],
     { cwd: project, env, stdio: ["pipe", "pipe", "pipe"], shell: false });
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   const buffered = [];
@@ -136,6 +147,9 @@ async function exercise(binary, home, project, disable) {
   const rpc = createRpc(binary, project, home, flags);
   try {
     await rpc.wait(frame => frame.type === "ready");
+    const state = await rpc.request("get_state");
+    assert.equal(state.model?.provider, "erosiano-smoke", "OMP did not select the fixture provider");
+    assert.equal(state.model?.id, "fixture", "OMP did not select the fixture model");
     verifyCommandCatalog(await rpc.request("get_available_commands"));
     await rpc.request("prompt", { message: "/erosiano-dev status" });
     await rpc.request("prompt", { message: "/erosiano-dev adaptive" });
@@ -159,7 +173,13 @@ async function exercise(binary, home, project, disable) {
     assert.equal(migrated.preserved, "legacy-value");
     assert.equal(JSON.parse(readFileSync(join(project, ".engineering-proxy.json"), "utf8")).enforcement, "balanced");
   } finally {
-    await rpc.close();
+    try {
+      await rpc.close();
+    } catch (error) {
+      // This process has an isolated HOME and dummy model credential, not user secrets.
+      const diagnostic = rpc.diagnostics().trim();
+      throw new Error(error.message + (diagnostic ? "\nOMP stderr (bounded): " + diagnostic : ""), { cause: error });
+    }
   }
 }
 
