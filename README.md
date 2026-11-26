@@ -10,7 +10,7 @@ Keeps your `balanced + adaptive + readable` engineering standards separate from 
 
 ## Unreleased: agent-guided project baseline foundation
 
-This release candidate adds a short scoped-baseline requirement to both modes, detailed baseline guidance in explicit review, and `/erosiano-dev baseline [scope]` for an explicit read-only discovery request. Scope text retains its case; a busy agent receives a follow-up. Disabled configuration prevents dispatch. The extension does not scan repositories or enforce baseline findings automatically. The agent collects scoped evidence through approved tools. Automatic baseline freshness/cache and live OMP acceptance remain follow-up work. The versioned registry and supplied-context resolver below cover the approved practice catalog.
+This release candidate adds a short scoped-baseline requirement to both modes, detailed baseline guidance in explicit review, and `/erosiano-dev baseline [scope]` for an explicit read-only discovery request. Scope text retains its case; a busy agent receives a follow-up. Disabled configuration prevents dispatch. The extension does not scan repositories or enforce baseline findings automatically. The agent collects scoped evidence through approved tools. Explicit bounded evidence sampling and scoped fingerprint cache are described below; full semantic baseline discovery and live OMP acceptance still require the agent and real host. The versioned registry and supplied-context resolver below cover the approved practice catalog.
 
 ## Migration from engineering-proxy (unreleased)
 
@@ -19,6 +19,10 @@ This release candidate adds a short scoped-baseline requirement to both modes, d
 - Both old and new disable flags are honored. Both session-entry names are read in chronological order; only the new name is written. A restart with one active plugin is required for prompt/status migration. Complete old and new owned blocks reconcile; malformed tails are preserved and warned.
 - `/engineering-proxy` and `/engineering-review` remain temporary compatibility aliases for the canonical commands. The optional companion package name changes to `omp-erosiano-dev`; package consumers must deliberately update the dependency/import or continue using their installed legacy package. Existing ESLint rule namespace `engineering-proxy/*` and CLI names `ksd-check-changed`, `ksd-review-verdict` are preserved.
 - Marketplace commands below describe the candidate identity after publication. Actual host marketplace migration, upgrade/downgrade, and live session behavior are **NOT VERIFIED**. The repository URL stays unchanged; no package registry publication is implied.
+
+## Scoped baseline evidence (unreleased)
+
+The explicit baseline command additionally samples local ancestor instructions/tooling and the target/direct siblings. It hashes bounded regular in-root files, records a direct directory inventory and supported local Git HEAD/ref, and returns only metadata, not file contents. It skips secret-like paths, symlinks and dependency/cache directories; caps file size/count and directory enumeration. A separate optional CLI `erosiano-baseline --root project --scope apps/web` emits a JSON snapshot. No Git subprocess or automatic scan runs per turn. An extension-instance cache (16 entries) is cleared on session/branch switches and compares a newly captured fingerprint on each explicit request. Matched fingerprints mean **sampled bytes/inventory only**, not a complete repository or semantic baseline; agent must still inspect relevant dirty/untracked files, callers, instructions and tests. Unknown/truncated/oversize evidence or unsupported linked-worktree metadata cannot produce a cache match. Nonpath scopes fall back to agent-guided discovery. Live host permissions and complete baseline freshness remain acceptance gates.
 
 ## Practice registry and resolution (unreleased)
 
