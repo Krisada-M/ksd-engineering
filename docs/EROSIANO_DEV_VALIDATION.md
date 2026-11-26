@@ -57,9 +57,9 @@ node plugins/erosiano-dev/test/eval/assess-v1.mjs release-report.json results.js
 
 Supply a JSON report with `schemaVersion: 1`, `candidateCommit`, and `criteria` entries E01–E15 from the specification, each with `id`, `kind`, `status`, `headSha`, `reference`. The kinds are E01 regression, E02 migration, E03 live-host, E04/E05 baseline, E06 resolver, E07 catalog, E08 native-gates, E09 integration, E10 review, E11 measurement, E12 integration, E13 live-host, E14 evaluation, E15 approval. All must be VERIFIED with exact-head evidence. Also provide:
 - `ci`: actual workflow record (headSha, status, conclusion, url, jobs with name, status, conclusion, steps). Required matrix jobs and applicable steps must have executed successfully.
-- `reviewGates`: existing review-verdict format for typecheck, lint, tests, runtime, security and ci-parity; all six required and critical.
+- `reviewGates`: existing review-verdict format for typecheck, lint, tests, runtime, security and ci-parity; all six required and critical. At release scope each command's evidence must also include the exact candidate headSha. The CI run must include release metadata, generated artifact parity, build, lint, typecheck, tests and syntax checks.
 - `independentReview`: headSha, status, reviewer, reference, unresolvedCritical (must be 0).
-- `liveHost`: separate darwin and linux records with exact headSha, status, ompVersion, reference, and observed true marketplaceInstall, promptInjection, sessionReplay, rollback, ponytailOnOff, intelligenceFallback.
+- `liveHost`: separate darwin and linux records with exact headSha, status, ompVersion, reference, and observed true marketplaceInstall, promptInjection, sessionReplay, rollback, ponytailOnOff, intelligenceFallback, practiceResolver.
 
 The scorer runs the pinned-plan assessment itself; no supplied E14 assertion can replace it. It rejects missing required evidence; even `EVIDENCE_COMPLETE_FOR_OWNER_REVIEW` does not authenticate evidence or authorize a release. No test result, host record, comparative trial or approval is synthesized. Do not commit secret-bearing logs or provider credentials.
 
@@ -72,3 +72,15 @@ The same pinned-host matrix additionally runs `smoke-omp-prompt.mjs` with a dete
 The host matrix also checks out the original v0.6 marketplace at 73fc916c694946fd79a7cf71e04c35bbec42cb27 and Ponytail 5.3.3 at ebd8654c2c627f721eb8f9c0d1bd4090a29f9e10, both pinned and without persisted checkout credentials. `smoke-omp-adoption.mjs` installs the local legacy marketplace into disposable HOME, opens a synthetic model session, uninstalls it, installs the local candidate, resumes the same session, changes actual Ponytail modes, switches sessions, migrates config and rolls back to the legacy package. Ponytail's actual Pi extension is loaded explicitly (no Claude hook bundle or skill execution). Only loopback synthetic model traffic is expected. Remote marketplace fetching, real model quality and KSD Intelligence remain separate gates. The script never touches the operator's actual OMP config or credentials.
 
 The pinned host matrix also checks out KSD Intelligence v1.1.0 at `13d5293378d55dde14945e92e18ffb9b9ca6ee90`. The test installs only its pinned TypeScript runtime using the upstream owner-run setup command in a disposable HOME, indexes a small synthetic Git/TypeScript workspace, and launches the real stdio server separately from its legacy policy extension. A scripted loopback model requests only the four explicitly permitted read tools. Review guidance and actual search, impact, dirty-diff and status results must reach the model transport; absent server guidance must fall back to native evidence. The test uses direct MCP tools (bash disabled), no provider credentials or external LLM; dependency setup may reach npm, and GitHub runners are network-enabled. This is scoped integration evidence, not proof of complete graph coverage or model adherence. No upstream project changes.
+
+## Measured prompt overhead and opt-in resolver
+
+The same pinned OMP matrix compares v0.6.0 and the current candidate with one benchmark implementation, identical workloads, Node version, runner architecture and OMP's embedded o200k_base tokenizer. Run locally with trusted checkouts:
+
+```bash
+node plugins/erosiano-dev/test/eval/compare-overhead.mjs --omp /absolute/path/to/omp --legacy /absolute/path/to/v0.6-checkout
+```
+
+The JSON report records actual balanced/adaptive policy byte and token counts, four workloads' p50/p95 hook time, loader/build/status write counts and candidate/baseline ratios. Missing tokenizer results fail the matched benchmark; normal unit benchmark still reports tokenizer unavailable where OMP is absent. Timing is instrumented, single-process and runner-dependent, not provider latency or proof of a speedup. Neither a successful measurement nor a token count establishes that a proposed budget is owner-approved.
+
+The real-host opt-in resolver smoke drives the OMP tool through scripted local model calls: default registration off, explicitly enabled fresh TypeScript selection and bounded policy output, refusal of stale sampled bytes, and no raw external model credentials. Its actual request/result evidence is scoped to the synthetic fixture, not proof of agent judgment. The fixed v1 gate requires both host jobs to run these steps on the exact candidate.

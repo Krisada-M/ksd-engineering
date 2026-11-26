@@ -1,53 +1,200 @@
-# erosiano-dev for OMP (v0.7.0 candidate)
+# erosiano-dev
 
-**Status:** unreleased v0.7 candidate; rebrand and compatibility migration are implementation changes pending CI and live OMP acceptance. The previous v0.6.0 personal style profile was built on top of v0.5.x global/project/session mode inheritance and v0.4.0 TypeScript performance changes. CI (Ubuntu and macOS) verifies release metadata, the repository's own style rules via ESLint, strict TypeScript compilation, checked-in JavaScript artifacts, and runtime tests. Prompt injection was observed in a live OMP session on WSL; Mac and Ponytail mode-switching smoke is still NOT VERIFIED.
+**Baseline-driven engineering guidance for [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi).**
 
-**v0.6.0 changes:** the per-turn policy is now the KSD personal style profile (~430 tokens, down from ~950); the SDLC checklist moved to `/erosiano-dev review`. **Behavior change:** `blank-before-return` no longer requires a blank line when only one statement precedes the return. `examples/eslint.config.mjs` ships the full profile as blocking errors.
+Understand the project before changing it. Follow its architecture and contracts before imposing personal preferences. Select the practices that matter, then verify the work with real evidence.
 
-**v0.5.1 changes:** hermetic tests (isolated `HOME`); `check-changed` no longer reports a false `NOT_RUN` when paths differ only by symlinks (macOS `/var` vs `/private/var`); the global `~/.omp` directory is no longer treated as a project root; the repository now passes its own ESLint rules in CI. **Breaking (undocumented API):** the named export `syncStatus` was removed from `index.js`; use `KsdRuntime#syncStatus` from `dist/runtime.js`. OMP loads only the default export, so installed plugins are unaffected.
+[![Tests](https://github.com/Krisada-M/ksd-engineering/actions/workflows/tests.yml/badge.svg)](https://github.com/Krisada-M/ksd-engineering/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Keeps your `balanced + adaptive + readable` engineering standards separate from Ponytail's simplification rules.
+**Development candidate:** package and marketplace metadata remain at **0.7.0**. The v1.0 engineering roadmap is implemented in stages; release acceptance is not yet complete. See [verification and limitations](#verification-and-limitations). This is the successor to Engineering Proxy, not an additional policy plugin to install alongside it.
 
-## Unreleased: agent-guided project baseline foundation
+## What it does
 
-This release candidate adds a short scoped-baseline requirement to both modes, detailed baseline guidance in explicit review, and `/erosiano-dev baseline [scope]` for an explicit read-only discovery request. Scope text retains its case; a busy agent receives a follow-up. Disabled configuration prevents dispatch. The extension does not scan repositories or enforce baseline findings automatically. The agent collects scoped evidence through approved tools. Explicit bounded evidence sampling and scoped fingerprint cache are described below; full semantic baseline discovery and live OMP acceptance still require the agent and real host. The versioned registry and supplied-context resolver below cover the approved practice catalog.
+- A compact, cached engineering policy in ordinary agent turns; detailed baseline discovery, contextual practice selection and SDLC review on demand.
+- 138 versioned practices in 12 categories, resolved against observed task/project context, confidence, project conventions, and required safety/native gates.
+- Bounded read-only evidence sampling and fingerprinting, optional evidence-bound policy packs, and explicit unknown/conflict reporting.
+- Optional TypeScript-aware ESLint, compiler profiles, changed-line diagnostics and evidence-aware review verdicts.
+- Compatible with independent Ponytail simplification guidance and optional KSD Intelligence CLI/direct MCP evidence.
+- Zero required runtime npm dependencies. No automatic repository rewrite, dependency installation, test execution, tool activation, external LLM request, merge or deployment.
 
-## Migration from engineering-proxy (unreleased)
+| Component | Responsibility |
+|---|---|
+| OMP | Agent orchestration, tools, approvals and session permissions |
+| erosiano-dev | Project baseline, engineering practices, quality and evidence guidance |
+| Ponytail (optional) | Simplicity, YAGNI and its own review/modes |
+| KSD Intelligence (optional) | Code navigation, dependency impact and changed-symbol evidence |
+| Host project | Architecture, contracts, formatter/linter, compiler, tests, security invariants and CI |
 
-- Keep **one active extension**. Disable/uninstall the old engineering-proxy plugin before installing the new marketplace identity, then restart OMP. The new extension refuses activation when the host already reports conflicting engineering commands. Detection is best-effort and cannot protect against a later-loading uncontrolled legacy instance.
-- The new global file is `~/.omp/agent/erosiano-dev.json`; the new repo file is `.erosiano-dev.json`. When absent, the corresponding legacy file is read without modification. If both exist, the new file is authoritative, even if invalid. Status reports competing config files; no silent merging of stale values. Explicit mode writes migrate the selected settings and unknown keys into the new file atomically. Reset creates the new config when needed, so old mode values cannot resurrect. Back up both files before rollback; v0.6 reads only the old files.
-- Both old and new disable flags are honored. Both session-entry names are read in chronological order; only the new name is written. A restart with one active plugin is required for prompt/status migration. Complete old and new owned blocks reconcile; malformed tails are preserved and warned.
-- `/engineering-proxy` and `/engineering-review` remain temporary compatibility aliases for the canonical commands. The optional companion package name changes to `omp-erosiano-dev`; package consumers must deliberately update the dependency/import or continue using their installed legacy package. Existing ESLint rule namespace `engineering-proxy/*` and CLI names `ksd-check-changed`, `ksd-review-verdict` are preserved.
-- Marketplace commands below describe the candidate identity after publication. Actual host marketplace migration, upgrade/downgrade, and live session behavior are **NOT VERIFIED**. The repository URL stays unchanged; no package registry publication is implied.
+```mermaid
+flowchart TD
+    A[OMP agent] --> B[Short engineering policy]
+    B --> C[Scoped baseline and project evidence]
+    C --> D[Practice resolver and contextual pack]
+    D --> E[Implementation or review]
+    E --> F[Native project verification]
+    G[Ponytail - optional] --> E
+    H[KSD Intelligence CLI or MCP - optional] --> C
+    F --> I[Evidence-aware verdict]
+```
 
-## Scoped baseline evidence (unreleased)
+The extension supplies guidance rather than a mandatory orchestrator or a security boundary. The agent must actually inspect the repository and execute permitted checks.
 
-The explicit baseline command additionally samples local ancestor instructions/tooling and the target/direct siblings. It hashes bounded regular in-root files, records a direct directory inventory and supported local Git HEAD/ref, and returns only metadata, not file contents. It skips secret-like paths, symlinks and dependency/cache directories; caps file size/count and directory enumeration. A separate optional CLI `erosiano-baseline --root project --scope apps/web` emits a JSON snapshot. No Git subprocess or automatic scan runs per turn. An extension-instance cache (16 entries) is cleared on session/branch switches and compares a newly captured fingerprint on each explicit request. Matched fingerprints mean **sampled bytes/inventory only**, not a complete repository or semantic baseline; agent must still inspect relevant dirty/untracked files, callers, instructions and tests. Unknown/truncated/oversize evidence or unsupported linked-worktree metadata cannot produce a cache match. Nonpath scopes fall back to agent-guided discovery. Live host permissions and complete baseline freshness remain acceptance gates.
+## Quick start
 
-## Practice registry and resolution (unreleased)
+Requires a compatible OMP installation; live CI pins **OMP 19.2.1** on Linux and macOS. Optional standalone JavaScript companions support Node.js >=20; development CI uses Node 22.13 and 24.
 
-The local catalog (`plugins/erosiano-dev/practices.json`) has 138 stable versioned practice IDs derived from the approved spec. `/erosiano-dev practices [scope]` explicitly requests agent-guided baseline and selection. No new always-on tool schema or full catalog in every-turn policy. Use the optional companion on a context you have collected with permission:
+New installation from the repository marketplace:
+
+```bash
+omp plugin marketplace add Krisada-M/ksd-engineering
+omp plugin install erosiano-dev@erosiano-dev
+omp plugin list
+```
+
+Restart OMP and run these slash commands in the agent:
+
+```text
+/erosiano-dev status
+/erosiano-dev adaptive
+/erosiano-dev baseline src
+/erosiano-dev practices src
+/erosiano-dev review src
+```
+
+Marketplace ID: `erosiano-dev@erosiano-dev`. GitHub repository: `Krisada-M/ksd-engineering`. npm companion: `omp-erosiano-dev`. These are different identifiers. The marketplace follows repository metadata; installation from main does not imply that a v1.0 release or npm publication exists.
+
+To update an existing new-identity installation:
+
+```bash
+omp plugin marketplace update erosiano-dev
+omp plugin upgrade erosiano-dev@erosiano-dev
+```
+
+Restart, check `omp plugin list` and `/erosiano-dev status`.
+
+### Migrate from Engineering Proxy v0.6
+
+Back up the existing global/project configuration and retain the old marketplace for rollback. Uninstall or disable the previous **policy extension**, install the new identity, then restart OMP. If you manage a legacy installation directly:
+
+```bash
+omp plugin uninstall engineering-proxy@engineering-proxy
+omp plugin marketplace add Krisada-M/ksd-engineering
+omp plugin install erosiano-dev@erosiano-dev
+```
+
+Keep only one engineering policy extension active. The candidate can refuse activation when it detects already registered engineering commands, but cannot guarantee safe coexistence with a later-loading legacy extension. Do not install the bundled KSD Intelligence OMP extension together with erosiano-dev while that bundle still contains Engineering Proxy.
+
+New config paths are `~/.omp/agent/erosiano-dev.json` and `<repo>/.erosiano-dev.json`. If the corresponding new file is absent, the legacy `engineering-proxy.json` / `.engineering-proxy.json` is read without mutation. When both exist the new file wins, even if invalid. Explicit writes migrate settings, preserve unrelated keys and atomically write the new file. The old file remains intact. Reset does not resurrect a legacy mode. Session entries for both identities are replayed in order; new writes use `erosiano-dev-mode`.
+
+Legacy `/engineering-proxy` and `/engineering-review` aliases remain; both disable flags are honored. The ESLint namespace `engineering-proxy/*` and existing `ksd-*` binaries remain compatible. To roll back, uninstall the new identity, reinstall the trusted v0.6 package, restore the intended legacy settings if necessary, and restart. v0.6 only reads its own configuration; it does not inherit new-only writes.
+
+Local marketplace installation, legacy session replay, upgrade and rollback have been tested on actual OMP hosts in disposable environments ([PR #23](https://github.com/Krisada-M/ksd-engineering/pull/23)).
+
+## Configuration and commands
+
+Global/project JSON example:
 
 ```json
 {
-  "facets": { "code": true, "typescript": true, "frontend": false, "database": false },
-  "mode": "balanced",
-  "projectOverrides": {
-    "A05": { "disposition": "prefer-project", "reason": "Layer-first", "evidence": "AGENTS.md:7" }
-  },
-  "enabledGates": ["T06"]
+  "enabled": true,
+  "enforcement": "adaptive",
+  "intelligenceMode": "off"
 }
 ```
 
-Run `node plugins/erosiano-dev/practices.js --context context.json` (or installed `erosiano-practices --context context.json`), or `--group typescript` to inspect one group. Facts are explicit; omitted facets stay UNKNOWN, never PASS. Applicable rules are selected by their predicates. Project preferences suppress only non-required guidance; required/security/gate conflicts are surfaced. Enabled native gates are supplied facts, not proof of lint adoption or execution. The resolver never reads host source, executes checks or changes config. Catalog mechanisms and applicability are reviewable defaults, not universal requirements. The exact mode-specific style semantics remain in the existing policy.
+The project root is resolved from applicable Git/OMP project markers; the global OMP agent directory is not a project marker. Do not store secrets in config. Mode precedence:
 
-## Optional practice tool and KSD Intelligence integration (unreleased)
+```text
+session override > project config > global config > built-in balanced
+```
 
-Default: no extra agent tool schema, no intelligence dependency. If the owner sets `EROSIANO_DEV_PRACTICE_TOOL=1` before launch, compatible OMP hosts register the read-only `erosiano_resolve_practices` tool. It accepts bounded JSON context and optional group, resolves supplied facts and reports conflicts/unknowns. Oversize output asks for a group rather than silently treating omitted rules as passed. Registration or a mock test is not live-host verification.
+The project `enabled` setting overrides the global one. Invalid config disables policy injection and exposes an error in status rather than overwriting the file. OMP can continue without guidance. Intelligence mode defaults to off; `cli` and `mcp` are explicit opt-ins.
 
-The current ksd-intelligence repository (main e2be8fa54b318afd88f2c5312edd2fb6a751c77a) **bundles Engineering Proxy v0.6.0**, including its command aliases. Do not install both OMP extensions. Its legacy disable flag is shared with erosiano-dev and does not reliably separate command registration. Use ksd-intelligence's separately installed local CLI or MCP server instead. Its own repository documents Node >=22.5, runtime setup and first-query local indexing; review these prerequisites before approving any provider commands. No changes were made to that repository.
+| Mode | Behavior |
+|---|---|
+| Balanced | Advisory style preferences; native repository gates remain authoritative |
+| Adaptive | Avoidable nesting is fix-required in changed-scope review only when a behavior-preserving rewrite is established; uncertain cases warn |
 
-Set `"intelligenceMode": "mcp"` in the selected erosiano-dev config only after approving a local server named `ksd-intelligence` fixed to the intended absolute root, or use `"cli"` for agent-guided approved ei commands. Default is off; invalid/absent/partial capability is reported, never force-enabled. Example OMP project MCP definition (manual, illustrative; verify your actual executable and root):
+Both modes retain strict evidence, security, and behavior-preservation guidance. Neither bypasses native checks.
+
+| Command | Purpose |
+|---|---|
+| `/erosiano-dev status` | Effective mode, scope, warnings, optional integrations and command presence |
+| `/erosiano-dev balanced`, `/erosiano-dev adaptive` | Set current session override |
+| `/erosiano-dev reset` | Clear session override; inherit project/global/default |
+| `/erosiano-dev global balanced`, `global adaptive`, `global reset` | Set/reset global mode (prefix each with `/erosiano-dev`) |
+| `/erosiano-dev repo balanced`, `repo adaptive`, `repo reset` | Set/reset project mode (prefix each with `/erosiano-dev`) |
+| `/erosiano-dev baseline [scope]` | Read-only, risk-scaled baseline discovery |
+| `/erosiano-dev practices [scope]` | Select relevant practices and surface conflicts/unknowns |
+| `/erosiano-dev review [scope]` | Evidence-based SDLC review with relevant baseline and practice guidance |
+
+Explicit global/project mode writes preserve unrelated settings and never silently clear a session override. Disable per project with `{"enabled":false}` or launch OMP with `EROSIANO_DEV_DISABLED=1` (legacy `ENGINEERING_PROXY_DISABLED=1` also works).
+
+The EROSIANO status line indicates effective mode and agent activity, **not** a passing quality gate. If preferred, choose the OMP Pi composer using `omp config set composer.shape pi`; this is an operator-controlled appearance setting. The extension does not change it.
+
+## Baseline and contextual practices
+
+Before substantial changes, read applicable instructions, native toolchain, maintained local code, callers, contracts and tests. Distinguish CURRENT, LEGACY, TRANSITIONAL, LOCAL, EXCEPTION and UNKNOWN. Use evidence and confidence rather than treating the most common historical pattern as the current standard.
+
+The standalone sample hashes bounded regular files at the scoped target/direct siblings and ancestor configs. It excludes secret-like paths, symlinks and dependency/cache directories. Include relevant caller/test/CI evidence beyond the direct scope explicitly:
+
+```bash
+erosiano-baseline --root . --scope apps/web \
+  --include packages/shared/src/api.ts \
+  --include .github/workflows/tests.yml
+```
+
+There are at most 24 explicit additional paths. Linked worktrees can opt into native Git revision discovery with `--git` on the standalone CLI; use only trusted repositories and executables. OMP does not automatically execute Git for sampling. The bounded cache rechecks sampled bytes; a fingerprint match does **not** establish whole-worktree freshness or semantic truth.
+
+A fresh evidence-bound selection accepts a context JSON (illustrative project paths):
+
+```json
+{
+  "mode": "adaptive",
+  "baseline": {
+    "scope": "apps/web",
+    "additionalPaths": ["packages/shared/src/api.ts", ".github/workflows/tests.yml"],
+    "fingerprint": "<actual current sample fingerprint>"
+  },
+  "facets": { "typescript": true },
+  "observations": {
+    "typescript": {
+      "paths": ["apps/web/package.json", "apps/web/main.ts"],
+      "classification": "CURRENT",
+      "confidence": "HIGH"
+    }
+  }
+}
+```
+
+```bash
+erosiano-practices --context context.json --root . --policy --group typescript
+erosiano-practices --group security
+```
+
+Use `--git` consistently if the snapshot used it. Project overrides require reason, evidence and provenance in fresh mode; enabled native gates require matching `gateEvidence`. Uncertain observations become unknown and uncertain overrides/gates are refused. No missing observation is assumed false. Stale or incomplete snapshots cannot produce a fresh policy pack. Output bounds disclose omitted rules and conflicts across groups; omission never waives an invariant.
+
+The read-only host tool `erosiano_resolve_practices` is optional: set `EROSIANO_DEV_PRACTICE_TOOL=1` before launching OMP. Default operation adds no tool schema. The tool accepts a JSON `context` string, optional `group`, and `format: "policy"` for a fresh pack. It derives project root from the host, not context input. Its interpretations are supplied evidence, not a verifier.
+
+Catalog: [138 stable practice entries](plugins/erosiano-dev/practices.json). Architecture, rule families, scope and acceptance requirements: [technical specification](docs/EROSIANO_DEV_SPEC.md).
+
+## Optional integrations
+
+### Ponytail
+
+```bash
+omp plugin marketplace add DietrichGebert/ponytail
+omp plugin install ponytail@ponytail
+```
+
+Ponytail's `/ponytail lite|full|ultra|off` and `/ponytail-review` remain its own commands. erosiano-dev does not toggle or inspect its mode, call its review, or replace its prompt/status. Actual live coexistence has been tested with pinned Ponytail 5.3.3 in full/lite/off modes, including session replay and rollback.
+
+### KSD Intelligence
+
+Use the separately configured [KSD Intelligence](https://github.com/Krisada-M/ksd-intelligence) CLI or stdio MCP, not its bundled legacy engineering-policy extension. Review upstream Node >=22.5, runtime setup and indexing prerequisites. Current direct MCP smoke pins KSD Intelligence v1.1.0 at [13d5293](https://github.com/Krisada-M/ksd-intelligence/commit/13d5293378d55dde14945e92e18ffb9b9ca6ee90).
+
+Set `"intelligenceMode": "mcp"` in the selected erosiano-dev config. Example project `.omp/mcp.json` (manual; substitute trusted actual paths):
 
 ```json
 {
@@ -61,251 +208,80 @@ Set `"intelligenceMode": "mcp"` in the selected erosiano-dev config only after a
 }
 ```
 
-The bridge checks the documented OMP active MCP names `mcp__ksd_intelligence_ei_status/search/impact/changes` (each suffix is a separate name), not fuzzy names or installed-but-inactive tools. Advertised names do not authenticate origin/version/root, freshness or coverage. Explicit baseline/practices/review guidance references the actual documented input contracts; the agent must call only via permitted tools and compare affected callers/tests with native evidence. CLI mode does not probe or execute the binary. Incomplete/stale/unavailable results fall back to source inspection. No automatically launched subprocess, setup, index, tool activation, file mutation or remote call.
+The bridge recognizes the exact active OMP direct tool names `mcp__ksd_intelligence_ei_status`, `mcp__ksd_intelligence_ei_search`, `mcp__ksd_intelligence_ei_impact`, and `mcp__ksd_intelligence_ei_changes`. Review the server identity, root, version and freshness before using its results. If the four direct tools are not exposed (including other tool-mounting modes), the bridge reports partial/unavailable capability and falls back to native inspection. Bash-mounted MCP is not a verified direct-tool integration. Do not enable tools merely to satisfy the extension. For CLI mode, set `"intelligenceMode": "cli"` and use permitted `ei` commands with the intended root.
 
-Source contracts inspected: [KSD tools](https://github.com/Krisada-M/ksd-intelligence/blob/e2be8fa54b318afd88f2c5312edd2fb6a751c77a/docs/TOOLS.md), [bundled OMP adapter](https://github.com/Krisada-M/ksd-intelligence/blob/e2be8fa54b318afd88f2c5312edd2fb6a751c77a/src/adapters/omp/extension.ts), [OMP extensions](https://github.com/can1357/oh-my-pi/blob/main/docs/extensions.md), [OMP MCP config](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md), [MCP name bridge](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-server-tool-authoring.md). Live OMP + MCP and tool registration matrix remains NOT VERIFIED.
+The extension does not start the server, install a runtime, index a project, launch subprocesses automatically or authenticate provider output. [Live integration CI](https://github.com/Krisada-M/ksd-engineering/actions/runs/45774403301) tested actual search, caller/test impact, dirty changes, status and unavailable-server fallback over stdio, with a scripted local model.
 
-## Evidence-bound practice selection
+## Optional deterministic enforcement
 
-For substantial changes and explicit reviews, first inspect the actual project conventions and contracts. Extend the local sample to include the relevant caller, test, configuration or CI file:
-
-```bash
-erosiano-baseline --root . --scope apps/web --include packages/shared/src/api.ts --include .github/workflows/tests.yml
-```
-
-Up to 24 explicit relative files may be added to the bounded sample; outside-root, excluded, missing or symlinked explicit paths are refused. Extra paths are part of the fingerprint and cache key. By default no subprocess is launched. For a linked Git worktree, an operator may opt into `--git` on the CLI to use bounded native Git revision discovery instead of parsing local metadata; this reads Git's selected metadata outside the worktree when needed. Only use it with a trusted repository and Git executable. It does not run hooks, build, test or index. The OMP command and read-only resolver tool never opt into it automatically.
-
-To bind a practice decision to the snapshot, use a context JSON such as:
-
-```json
-{
-  "baseline": {
-    "scope": "apps/web",
-    "additionalPaths": ["packages/shared/src/api.ts", ".github/workflows/tests.yml"],
-    "fingerprint": "<fingerprint from the current baseline snapshot>"
-  },
-  "facets": { "typescript": true, "database": false },
-  "observations": {
-    "typescript": { "paths": ["apps/web/package.json", "apps/web/main.ts"], "classification": "CURRENT", "confidence": "HIGH" },
-    "database": { "paths": ["apps/web/main.ts"], "classification": "LOCAL", "confidence": "MEDIUM" }
-  }
-}
-```
-
-These are illustrative project-specific paths/facets; use actual inspected files and do not assert negative facts solely because a keyword was absent. Run `erosiano-practices --context context.json --root .` (append `--git` only if used for the snapshot). Overrides in `projectOverrides` additionally require a `provenance` object of the same shape; each enabled native gate needs an entry in `gateEvidence`. The optional OMP resolver accepts the same context and derives the root from the host. It never accepts a root or Git option from context. Low-confidence or legacy/transitional observations become unknown, and uncertain overrides/gates are refused. Missing, changed or incomplete snapshots cannot produce evidence-bound selection. Legacy supplied-context mode remains available and explicitly unverified.
-
-A matched fingerprint proves only that **sampled evidence bytes** matched during the bounded capture; it does not prove semantic classification, completeness, safety, or native gate execution. Inspect all affected consumers and verify actual checks. No whole-repository cache or automatic project policy enforcement is claimed.
-
-## Contextual policy packs and release checks
-
-After collecting a fresh scoped baseline and recording observations, run:
+The host project remains authoritative. Adopt only rules compatible with its existing ESLint/TypeScript tooling.
 
 ```bash
-erosiano-practices --context context.json --root . --policy --group typescript
+# From a trusted checkout of this repository:
+npm pack ./plugins/erosiano-dev --ignore-scripts
+# In the host project, install the generated tarball deliberately.
+npm install --save-dev /absolute/path/to/omp-erosiano-dev-0.7.0.tgz
 ```
 
-Omit the group for a bounded cross-group pack; the optional registered resolver accepts `format: "policy"`. Packs are composed from fresh sampled bytes and catalog text only, without copying raw provenance or project instructions into a higher-priority policy. They list conflicts and unresolved safety risks across groups, project-preference suppressions and omitted IDs. An oversized pack requires narrowing, not silently dropping gates. Balanced nesting review remains advisory; adaptive findings are conditional on a proven behavior-preserving transformation. Established project error contracts can override the Result preference, never required safety or native gates. Ordinary turns retain a short core; explicit review and practice commands direct the agent to the scoped selection. Actual agent adherence still needs comparative evaluation.
+Use `omp-erosiano-dev/eslint` in the existing ESLint flat config. Examples:
 
-The release protocol now includes a pinned-plan threshold assessor and a fixed v1 acceptance gate. See [validation protocol](docs/EROSIANO_DEV_VALIDATION.md). The real-host command smoke is explicitly operator-run with an installed trusted OMP binary; it does not invoke a model or install dependencies. These tools are not evidence of a completed live test or v1.0 release.
+- [Personal style profile](examples/eslint.config.mjs): blank-before-return, blank-between-functions, guard clauses, no nested ternaries and strict TypeScript boundaries.
+- [Type-aware correctness profile](examples/eslint.correctness.config.mjs): real typescript-eslint projectService checks for unhandled promises, unsafe types and exhaustive states; advisory strict booleans and atomic-update checks.
+- [Optional compiler settings](examples/tsconfig.correctness.json): strict mode, safe indexed access, exact optional properties, explicit returns and switch fallthrough.
 
-## Ownership boundaries
+Whitespace preferences: exactly one blank line before a return preceded by two or more statements in its block (optional after one; none before a first guard return), and one blank line between adjacent implementations. Avoid unsafe mechanical guard-clause rewrites. Established project error contracts win over personal Result/Exception preferences. No rule installation or host config rewrite is performed by the extension.
 
-- **Ponytail** owns YAGNI, removing needless abstractions, and `ponytail-review`.
-- **erosiano-dev** owns personal whitespace/guard-clause preferences, evidence, review boundaries and quality gates.
-- **Existing repository** owns formatter/linter/architecture conventions, typecheck and regression tests.
-- **OMP** owns agent orchestration, tool approvals and session permissions.
-
-The two extensions register *different commands* and *different policy sections*. erosiano-dev never reads/modifies Ponytail state, activates Ponytail, or invokes Ponytail review automatically. It works with Ponytail `off` and without Ponytail installed. It does not intercept or block tool calls.
-
-## Install Ponytail (official OMP instructions)
+For brownfield repositories, use changed-line diagnostics with the actual ESLint report:
 
 ```bash
-omp plugin marketplace add DietrichGebert/ponytail
-omp plugin install ponytail@ponytail
+git diff --no-ext-diff --unified=0 HEAD > changes.patch
+# Produce eslint.json using the host's actual lint command and JSON formatter.
+ksd-check-changed --diff changes.patch --eslint-report eslint.json
+ksd-review-verdict --report report.json
 ```
 
-## Install erosiano-dev
+The diff excludes untracked files; assess them and deletion-only behavior separately. The checker consumes reports rather than running lint; PASS does not prove lint coverage or behavior. The review verdict requires declared critical gates, real command evidence, nonzero passing test counts without skips, and exact-head CI evidence. No verdict authorizes merge or deployment.
 
-Repository: `Krisada-M/ksd-engineering` (renamed from the former trailing-hyphen name). Install with:
+## Development and testing
 
 ```bash
-omp plugin marketplace add Krisada-M/ksd-engineering
-omp plugin install erosiano-dev@erosiano-dev
-omp plugin list
-```
-
-This marketplace package resides in `plugins/erosiano-dev/` and publishes the correct `package.json#omp.extensions` entry. Restart OMP to load new extension modules.
-
-After a version is merged into main, refresh the marketplace and upgrade with `omp plugin marketplace update erosiano-dev` followed by `omp plugin upgrade erosiano-dev@erosiano-dev`. Restart OMP. Do not claim the new version is live until `omp plugin list` confirms it and a smoke test succeeds.
-
-The marketplace name is `erosiano-dev`, so the plugin ID is `erosiano-dev@erosiano-dev`. This differs from the GitHub repository name.
-
-## Commands and scope precedence
-
-All modes remain `balanced` or `adaptive`. The resolution order is **session override > project config > global config > built-in balanced**. The `enabled` setting merges independently (project overrides global). An unparsable or invalid config at either scope **disables policy injection** (fail-open: OMP keeps working, but no KSD guidance is sent). The EROSIANO status segment disappears, and the parse error is reported by `/erosiano-dev status`; fix the file to restore injection.
-
-| Command | Behavior |
-|---|---|
-| `/erosiano-dev` or `/erosiano-dev status` | Report effective mode, source, session override, global/project defaults and Ponytail command presence |
-| `/erosiano-dev adaptive` | Override the mode for the current session |
-| `/erosiano-dev balanced` | Override the mode for the current session |
-| `/erosiano-dev reset` | Reset the **session override** and inherit repo/global/built-in mode; saves a reset entry when OMP supports session persistence |
-| `/erosiano-dev global adaptive` | Set global default to adaptive for all repositories without a higher-priority override |
-| `/erosiano-dev global balanced` | Set global default to balanced |
-| `/erosiano-dev global reset` | Remove only global `enforcement` (preserves `enabled` and unrelated keys) |
-| `/erosiano-dev repo adaptive` | Set the current repository's default to adaptive |
-| `/erosiano-dev repo balanced` | Set the current repository's default to balanced |
-| `/erosiano-dev repo reset` | Remove only the repository's `enforcement` field |
-| `/erosiano-dev baseline [scope]` | Explicit agent-guided read-only baseline discovery (unreleased); no file changes or automatic checks |
-| `/erosiano-dev review [scope]` | Explicit evidence-based engineering review including scoped baseline guidance; Ponytail remains optional |
-
-Global file (automatically created on first global write): `~/.omp/agent/erosiano-dev.json`.
-
-Project file: `<repo>/.erosiano-dev.json`, resolved from the nearest ancestor with `.git` or `.omp` (the global `~/.omp` agent directory is not a project marker, so non-repo folders under HOME never write `~/.erosiano-dev.json`). Config files support `enabled:boolean` and `enforcement:"balanced"|"adaptive"`. Existing unknown keys are preserved on writes. Config updates use an atomic temporary file and rename. **Do not place secrets in these files.**
-
-Example global default:
-
-```json
-{ "enabled": true, "enforcement": "adaptive" }
-```
-
-Repo override:
-
-```json
-{ "enforcement": "balanced" }
-```
-
-With these files, new sessions in this repo start balanced, all other repos inherit adaptive, and a session-specific `/erosiano-dev adaptive` temporarily takes priority. `/erosiano-dev reset` restores the balanced repo mode. Global/repo commands write their respective files, but do **not** silently remove an existing higher-priority session override.
-
-Ponytail commands (`/ponytail lite|full|ultra|off` and `/ponytail-review`) are still exclusively owned by Ponytail. erosiano-dev does not mutate Ponytail state. Failed writes or invalid config files produce warnings instead of overwriting invalid contents.
-
-## Put REVIEW and KSD below the editor
-
-OMP owns the built-in `REVIEW` composer indicator. erosiano-dev owns only the `erosiano-dev` extension status key; it never overwrites `review` or `ponytail`. After installing a released version of the plugin, choose the native bottom-status composer:
-
-```bash
-omp config set composer.shape pi
-omp config get composer.shape
-```
-
-The `pi` composer renders the full status line beneath the editor, including OMP review context and extension status segments. You can also pick the Pi composer from `/settings` → Appearance → Composer Shape. To restore the original top-border layout: `omp config set composer.shape box`. This is a **global appearance setting** and is never changed automatically by this plugin. Project-local settings or other overrides can take precedence.
-
-The bottom status displays `○ 🛡 EROSIANO: BALANCED` (or `ADAPTIVE`) when the agent is idle and `● 🛡 EROSIANO: BALANCED` (or `ADAPTIVE`) while the agent is running. With a theme-capable OMP TUI the idle dot is dim and the active dot uses the accent color. Status refreshes on `agent_start`, `agent_end`, new sessions, switches, branches and explicit erosiano-dev commands. **The dot is agent activity, NOT a quality-gate pass indicator or proof that Ponytail itself is active.** KSD does not read or mutate Ponytail mode.
-
-Per-repository `{ "enabled": false }` or `EROSIANO_DEV_DISABLED=1` (or legacy `ENGINEERING_PROXY_DISABLED=1`) clears the EROSIANO status on the next supported lifecycle event, even if a review is running. `/erosiano-dev review` does not launch Ponytail review automatically, and never duplicates OMP's `REVIEW` indicator. For non-TUI hosts the status is best-effort and does not interfere with agent work.
-
-## SDLC workflow (both modes)
-
-The policy is split in two tiers so the per-turn prompt stays small:
-
-- **Every turn** (system prompt, previously ~430 tokens in v0.6.0; new footprint not yet measured): the KSD personal style profile (guard clauses, no nested ternaries, result-vs-throw error split, strict types, helper extraction, why-only comments, blank-line rules), the risky-behavior escalation checks, and "never claim an unexecuted check passed".
-- **Explicit requests only**: `/erosiano-dev baseline [scope]` delegates read-only baseline discovery; `/erosiano-dev review` includes detailed baseline guidance and the full Requirements → Design → Implementation → Verification → Delivery SDLC checklist in the effective mode.
-
-The checks are **risk-scaled**, not a rigid documentation ceremony: trivial style changes can use a short scope and focused checks, while security-sensitive authentication, payments, data migrations and concurrency require stronger contract and test evidence.
-
-Adaptive mode emphasizes flat control flow, early returns and guarded exits without unsafe mechanical rewrites. Avoidable nesting in newly changed code is treated as FIX REQUIRED in **review guidance**, but the static ESLint rule remains an optional warning until the consuming repository explicitly enables a deterministic blocking gate. Neither mode automatically runs tests, marks an SDLC stage complete, rewrites code, or authorizes release.
-
-Session mode is stored in an OMP custom entry named `erosiano-dev-mode` when `pi.appendEntry` is supported. On session resume/switch the latest valid entry is replayed; a reset tombstone stops older session overrides, and otherwise KSD resolves project → global → built-in defaults. KSD never overwrites Ponytail state.
-
-## TypeScript performance runtime (v0.4.0)
-
-KSD's hot path uses a **strict TypeScript** core at `plugins/erosiano-dev/src/runtime.ts` and checks in compiler-generated ESM under `dist/`. The OMP extension entry point remains `index.js`; it imports the compiled runtime in-process. **No native sidecar, Rust, new production dependency, or per-event subprocess** is used. Rebuilds use a pinned TypeScript compiler (5.8.3) and CI rejects generated artifact drift.
-
-- Configuration is cached per working directory for agent lifecycle events; it is explicitly refreshed on session lifecycle transitions, at the start of each new agent turn, and on status/command checks. Changes to repository configuration become visible at the next refresh point rather than during an already-running turn.
-- System prompt policy text is constructed once per effective mode and reused; the repository policy remains isolated from Ponytail.
-- Status writes are deduplicated per TUI instance using a WeakMap and reset on session transitions; changes to mode, activity, theme, or enable/disable state still redraw.
-- Typed checks run during development/CI, not at OMP runtime, and generated JavaScript ships with the plugin. No runtime npm install is required for the performance core.
-- `node plugins/erosiano-dev/test/benchmark.mjs` produces an **illustrative** single-process comparison using synthetic repeated status+policy calls; it is not a live OMP speed measurement. Numerical performance targets are aspirational until validated in real sessions.
-
-To validate from the repository root (dev tooling is pinned in the private root `package.json`; the published plugin has no runtime dependencies):
-
-```bash
-npm ci
+npm ci --ignore-scripts
+node validate-release.js
 npm run lint
+npm run typecheck
 npm run build
 git diff --exit-code -- plugins/erosiano-dev/dist/
 npm test
 node plugins/erosiano-dev/test/benchmark.mjs
 ```
 
-Tests isolate `HOME`, so a developer's real `~/.omp/agent/erosiano-dev.json` cannot change results.
+The strict TypeScript hot-path runtime ships checked-in ESM, caches policies by mode and deduplicates TUI status writes. Tests isolate HOME. Explicit scans, practice selection, and optional tool schemas are not injected into every turn. Build parity, package consumers, risk-sensitive fixtures and real host checks are covered by CI.
 
-## Deterministic changed-line diagnostics (opt-in)
+## Verification and limitations
 
-The plugin includes `eslint-rules/index.js`, `change-scope.js` and `check-changed.js`.
+Previous integrated milestones are supported by these exact PR-head CI runs (check the latest candidate separately):
 
-- Configure your repository's **existing ESLint setup and TypeScript parser** to load the KSD ESLint rules. The CLI does not install a parser or overwrite your ESLint config.
-- Produce a **zero-context** Git diff against the intended base (`git diff --no-ext-diff --unified=0 HEAD` includes staged and unstaged changes, but **not untracked files**).
-- Export ESLint's actual JSON report (`eslint --format json`); it may exit nonzero when it finds violations. Verify that the desired KSD rules are enabled in your repo; this utility does not prove it for you.
-- Run: `node plugins/erosiano-dev/check-changed.js --diff changes.patch --eslint-report eslint.json` from the **repository root**.
+| Scope | Evidence |
+|---|---|
+| Native Linux/macOS CI and Node 20 import floor | [PR #24 / CI #250](https://github.com/Krisada-M/ksd-engineering/actions/runs/45774403301) |
+| Real OMP 19.2.1 command/prompt transport, balanced/adaptive/reset/disabled | [PR #22](https://github.com/Krisada-M/ksd-engineering/pull/22) |
+| Local marketplace migration, Ponytail, session replay and rollback | [PR #23](https://github.com/Krisada-M/ksd-engineering/pull/23) |
+| Real pinned KSD Intelligence direct MCP and fallback | [PR #24](https://github.com/Krisada-M/ksd-engineering/pull/24) |
 
-Exit codes: 0 for PASS/WARN/NOT_APPLICABLE, 1 for FIX_REQUIRED, 2 for NOT_RUN/invalid input. PASS means only that the **provided report** contains no diagnostics on changed source lines (or adjacent boundary line). No parser invocation, CI run or LLM review is performed by the checker.
+Live OMP tests use actual binaries and synthetic loopback model transport. They establish the tested integration behavior, **not** LLM coding quality, full subagent compatibility or performance with real providers. CI runners are network-enabled; the tests use no real model credentials. Linked-worktree and scoped evidence checks do not establish complete repository discovery.
 
-Use in CI only after the host project explicitly adopts the ESLint rule config. For a change with no added source lines, the style check is NOT_APPLICABLE; this does not prove that deletion-only changes are behaviorally correct.
+The [validation protocol](docs/EROSIANO_DEV_VALIDATION.md) describes measured token/hook overhead against v0.6, the opt-in resolver live test, the eight-case independent study, preregistered thresholds, and exact-head E01–E15 release gates. Comparative real-model trials (no plugin vs v0.6 vs candidate), independent review, owner-approved thresholds/acceptance and the final release remain required. No fabricated benchmark, trial score or approval is bundled.
 
-## Evidence-aware review verdicts (opt-in)
+## Repository layout
 
-`review-verdict.js` exports `assessReview({scope, gates, requiredGates, reviewedCommit})` to assess a **provided** gate report. Declare applicable required and critical gates explicitly; omitted declared gates become NOT_RUN. Execution gates require command, working directory, result and successful exit code; `tests` additionally requires structured pass/fail/skip counts. Skipped tests cannot yield VERIFIED. `ci-parity` requires a successful HTTPS CI-run reference with a head SHA matching `reviewedCommit`. Missing critical evidence or failed required gates produce NO_GO; missing noncritical review evidence produces CONDITIONAL_GO, while release scope remains NO_GO.
-
-Run `ksd-review-verdict --report report.json` after installing the companion package, or `node plugins/erosiano-dev/review-verdict.js --report report.json` from this checkout. Exit 0 indicates READY_FOR_REVIEW or RELEASE_CANDIDATE, 1 indicates NO_GO or CONDITIONAL_GO, and 2 indicates NOT_ASSESSED or invalid input.
-
-This is a **report validator**, not a CI provider connector: supplied evidence is not independently authenticated, a good verdict does not authorize merge or deploy, and reviews must examine actual runtime/test results before marking a gate VERIFIED.
-
-## Optional Type-aware Correctness profile (unreleased)
-
-Compose `examples/eslint.correctness.config.mjs` into a compatible host ESLint flat config only after reviewing its existing parser, native rules, TypeScript projects and framework-specific exceptions. It uses the host's typescript-eslint and projectService for typed promise, unsafe type and exhaustive-switch rules; void alone is not accepted for floating promises. Strict boolean expressions, unused symbols and atomic-update heuristic start as warnings. Core no-unsafe-finally is shared across JS/TS. The optional `examples/tsconfig.correctness.json` provides strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes, noImplicitReturns and noFallthroughCasesInSwitch. Merge or extend these deliberately; do not overwrite project config, switch toolchains or force a brownfield migration. Native gates remain authoritative, lint is not concurrency or runtime proof, and dependencies are not installed by erosiano-dev. The unit suite exercises real TypeScript-aware ESLint and compiler fixtures.
-
-## Repo-adaptive style enforcement
-
-`before_agent_start` injects a short orthogonal policy into `systemPromptOptions.sections["erosiano-dev"]` where available. Fallback support preserves Ponytail and other existing prompt parts. Local `.erosiano-dev.json` is optional (see `examples/`), supports `enabled:boolean` and `enforcement: "balanced"|"adaptive"`. The repository default inherits the global config when absent (or balanced if both are absent); explicit session mode commands override both. Existing unrelated settings are untouched.
-
-Fallback string and array prompts are reconciled when enabled or disabled. An unterminated legacy string block is preserved rather than guessed; the extension warns that the session must be restarted.
-
-**Important:** OMP policy injection is guidance, not a deterministic test. To enforce your preferences at commit/CI, opt into `plugins/erosiano-dev/eslint-rules/index.js` from your existing ESLint flat config. No ESLint config is overwritten. Rules:
-
-- `blank-before-return`: error. Exactly one blank before a return preceded by two or more statements in the same block; after a single statement the blank is optional; never more than one; no blank before first-statement guard returns.
-- `blank-between-functions`: error. Exactly one blank between adjacent function implementations, including arrow functions assigned to const/let. Does not act on TS overload signatures.
-- `prefer-guard-clauses`: warning in this repository's dogfood config, error in the KSD profile; never a semantic autofix.
-
-`examples/eslint.config.mjs` is the full **KSD style profile** as blocking errors for lint-staged: the three rules above plus `no-else-return`, `no-nested-ternary`, `max-depth: 3`, and for TypeScript `no-explicit-any`, `no-non-null-assertion`, `consistent-type-assertions: never` (`as const` stays allowed) and `explicit-module-boundary-types`. Error handling (typed results in domain logic, throw at IO boundaries), helper extraction and why-only comments cannot be linted; they live in the prompt policy. On an existing codebase, gate only changed lines with `check-changed` rather than the whole tree.
-
-No automatic formatting or rewrites. The ESLint rules are not automatically enabled by installing the OMP plugin. Avoid adding a second linter if the repository has an authoritative existing formatting convention; align with it first.
-
-### Install the optional companion
-
-Create a tarball with `npm pack ./plugins/erosiano-dev --ignore-scripts` and install that tarball in the host repository. The private repository root is not the package. Import `omp-erosiano-dev/eslint` in the host's existing ESLint flat config and supply its own parser for TypeScript or JSX. The package also exposes `ksd-check-changed` and `ksd-review-verdict`; neither runs checks automatically.
-
-### Quality gates
-
-At a review checkpoint inspect changed files; run existing repo `format:check`, typecheck, lint, focused tests, and security checks as appropriate. Treat missing command/credentials as NOT RUN/BLOCKED, not PASS. Do not run migrations, database resets, real payments, merges or deployments as part of this plugin.
-
-### Safety and compatibility
-
-- No tool-call blocking, no auto-run of scripts, no network calls, no external LLM, no persistence of Ponytail mode.
-- No automatic changes to files or global OMP settings.
-- No new required runtime npm dependencies. ESLint rules run only when included in the host ESLint configuration.
-- `EROSIANO_DEV_DISABLED=1` (or legacy `ENGINEERING_PROXY_DISABLED=1`) disables prompt injection and `/erosiano-dev review` while keeping status available.
-- Optional per-repo `.erosiano-dev.json` can disable (`{"enabled": false}`) without touching global install.
-- For `.tsx/.ts` use the repository's AST parser and ESLint config; these rules consume an ESLint-compatible AST but do not supply a TypeScript parser.
-
-## Testing
-
-```bash
-npm ci
-node validate-release.js
-npm run lint
-npm test
-node --check plugins/erosiano-dev/index.js
+```text
+plugins/erosiano-dev/       OMP extension, registry, baseline and companions
+  src/                      Strict TypeScript policy/runtime/SDLC
+  dist/                     Checked-in compiled ESM
+  eslint-rules/             Optional style rules
+  test/                     Regression, host smoke and evaluation
+examples/                   Opt-in project configs
+docs/                       Specification and validation protocol
 ```
 
-Live OMP integration tests still required on both Mac and WSL, covering simultaneous installation, Ponytail mode changes, prompt de-duplication across sessions and subagents, and disabled fallback.
-
-## Planned next improvements (NOT implemented)
-
-- Native OMP change-scoped inspection after tool writes (currently the changed-line checker is manual/CI opt-in).
-- A command to run allowlisted deterministic checks with timeouts and read-only guardrails.
-- Architecture/contract adapters for repos such as Balance Prime.
-- Review feedback ledger with operator approvals and stable versioned rule IDs.
-- Eval suite with real pull requests and false-positive/false-negative scoring.
-
-Do not claim this version is a fully autonomous digital twin or an approving reviewer.
+See [historical v0.6 acceptance](docs/ACCEPTANCE.md) for the original release record. Licensed under MIT.

@@ -12,7 +12,7 @@ const CRITERIA = Object.freeze({
   E13: "live-host", E14: "evaluation", E15: "approval",
 });
 const JOBS = ["unit (ubuntu-latest, 22.13.0)", "unit (ubuntu-latest, 24)", "unit (macos-latest, 22.13.0)", "unit (macos-latest, 24)", "runtime-floor", "omp-host (ubuntu-latest)", "omp-host (macos-latest)"];
-const UNIT_STEPS = ["Run npm run lint", "Run npm run typecheck", "Run npm run build", "Run npm test", "Run node plugins/erosiano-dev/test/benchmark.mjs"];
+const UNIT_STEPS = ["Run npm ci --ignore-scripts", "Run node validate-release.js", "Run npm run lint", "Run npm run typecheck", "Run npm run build", "Run git diff --exit-code -- plugins/erosiano-dev/dist/", 'Run test -z "$(git status --porcelain -- plugins/erosiano-dev/dist/)"', "Run npm test", "Run node plugins/erosiano-dev/test/benchmark.mjs", "Run node --check plugins/erosiano-dev/index.js", "Run node --check plugins/erosiano-dev/check-changed.js", "Run npm run build && git diff --exit-code -- plugins/erosiano-dev/dist/"];
 const nonempty = value => typeof value === "string" && value.trim().length > 0;
 
 function exactCI(ci, head) {
@@ -25,7 +25,7 @@ function exactCI(ci, head) {
     if (name === "runtime-floor") {
       if (!steps.some(step => step.name === "Import dependency-free extension and companions" && step.conclusion === "success")) return false;
     } else if (name.startsWith("omp-host (")) {
-      if (!["Download and verify pinned OMP binary", "Real OMP command and migration smoke", "Real OMP prompt injection with loopback fixture", "Real OMP marketplace migration and Ponytail coexistence", "Real OMP KSD Intelligence MCP and fallback"].every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) return false;
+      if (!["Download and verify pinned OMP binary", "Real OMP command and migration smoke", "Real OMP prompt injection with loopback fixture", "Real OMP marketplace migration and Ponytail coexistence", "Real OMP KSD Intelligence MCP and fallback", "Matched v0.6 and candidate prompt overhead", "Real OMP opt-in practice resolver"].every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) return false;
     } else if (!UNIT_STEPS.every(stepName => steps.some(step => step.name === stepName && step.conclusion === "success"))) {
       return false;
     }
@@ -64,7 +64,13 @@ export function assessV1Readiness(report, study, plan, head) {
     scope: "release",
     reviewedCommit: head,
     requiredGates: ["typecheck", "lint", "tests", "runtime", "security", "ci-parity"].map(id => ({ id, critical: true })),
-    gates: report.reviewGates ?? [],
+    // The legacy report validator checks command evidence but only CI has a head binding.
+    // At release scope require an exact-head reference on every command as well.
+    gates: (report.reviewGates ?? []).map(gate => {
+      if (gate?.status !== "VERIFIED" || gate.evidence?.headSha === head) return gate;
+
+      return { ...gate, status: "UNVERIFIED" };
+    }),
   });
   checks.push({ id: "exact-head-ci", status: ciValid ? "PASS" : "NOT_ASSESSED" });
   checks.push({ id: "review-evidence", status: review.verdict === "RELEASE_CANDIDATE" ? "PASS" : "NOT_ASSESSED" });
@@ -73,10 +79,10 @@ export function assessV1Readiness(report, study, plan, head) {
     nonempty(independent.reviewer) && nonempty(independent.reference) && independent.unresolvedCritical === 0;
   checks.push({ id: "independent-review", status: independentlyReviewed ? "PASS" : "NOT_ASSESSED" });
   const host = report.liveHost;
-  const validHosts = Array.isArray(host) && ["darwin", "linux"].every(platform => host.some(item =>
+  const validHosts = Array.isArray(host) && ["darwin", "linux"].every(platform => host.filter(item =>
     item?.platform === platform && item.headSha === head && item.status === "VERIFIED" &&
     nonempty(item.ompVersion) && nonempty(item.reference) &&
-    ["marketplaceInstall", "promptInjection", "sessionReplay", "rollback", "ponytailOnOff", "intelligenceFallback"].every(key => item[key] === true)));
+    ["marketplaceInstall", "promptInjection", "sessionReplay", "rollback", "ponytailOnOff", "intelligenceFallback", "practiceResolver"].every(key => item[key] === true)).length === 1);
   checks.push({ id: "live-host-matrix", status: validHosts ? "PASS" : "NOT_ASSESSED" });
 
   return { status: checks.every(check => check.status === "PASS") ? "EVIDENCE_COMPLETE_FOR_OWNER_REVIEW" : "NO_GO",
